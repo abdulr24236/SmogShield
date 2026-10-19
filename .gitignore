@@ -1,5 +1,5 @@
 
-# Python cache files
+# Python cache
 __pycache__/
 *.py[cod]
 
@@ -15,9 +15,10 @@ env/
 .env
 .env.*
 
-# Raw and processed datasets
+# Local datasets
 data/raw/
 data/processed/
+data/archive_unused/
 
 # Temporary files
 *.tmp
