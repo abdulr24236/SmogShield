@@ -1,0 +1,22 @@
+file,column,unit,description
+city_info.csv,geoname_id,,GeoNames unique identifier.
+city_info.csv,city_name,,City name from GeoNames.
+city_info.csv,country_code,,ISO country code.
+city_info.csv,admin1,,First admin division.
+city_info.csv,admin2,,Second admin division.
+city_info.csv,feature_code,,GeoNames feature code.
+city_info.csv,latitude,degrees,Latitude decimal degrees.
+city_info.csv,longitude,degrees,Longitude decimal degrees.
+city_info.csv,population,people,Population from GeoNames.
+air_quality_historical.csv,date,YYYY-MM-DD,Time index.
+air_quality_historical.csv,pm2_5,µg/m³,PM2.5 concentration.
+air_quality_historical.csv,pm10,µg/m³,PM10 concentration.
+air_quality_historical.csv,ozone,µg/m³,Ozone concentration.
+air_quality_historical.csv,nitrogen_dioxide,µg/m³,NO2 concentration.
+air_quality_historical.csv,sulphur_dioxide,µg/m³,SO2 concentration.
+air_quality_historical.csv,carbon_monoxide,µg/m³,CO concentration.
+air_quality_historical.csv,us_aqi,index,US AQI index.
+air_quality_historical.csv,european_aqi,index,European AQI index.
+air_quality_historical.csv,uv_index,index,UV index.
+air_quality_historical.csv,aerosol_optical_depth,index,Aerosol optical depth.
+air_quality_historical.csv,dust,µg/m³,Dust concentration.
