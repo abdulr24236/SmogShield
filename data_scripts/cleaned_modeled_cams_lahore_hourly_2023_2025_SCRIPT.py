@@ -21,6 +21,9 @@ df["time"] = pd.to_datetime(df["time"].astype(str).str.strip(), format="%Y-%m-%d
 bad_ts = int(df["time"].isna().sum())
 df = df.dropna(subset=["time"])
 print(f"[3] rows dropped for unparseable timestamp: {bad_ts}")
+#the fix claude suggested for the pakistan and USA time zone issues. just adding the line below will fix it
+# Step 3b: raw timestamps are UTC -> convert to Pakistan time (Asia/Karachi, UTC+5), then drop the tz label so the CSV stays plain
+df["time"] = df["time"].dt.tz_localize("UTC").dt.tz_convert("Asia/Karachi").dt.tz_localize(None)
 
 # Step 4: force every measurement column to numeric (non-numeric -> NaN, counted)
 value_cols = [c for c in df.columns if c != "time"]
