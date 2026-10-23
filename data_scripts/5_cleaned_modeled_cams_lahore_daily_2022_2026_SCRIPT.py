@@ -1,10 +1,11 @@
 """clean_file1.py -- cleans modeled_cams_lahore_daily_2022_2026.csv (daily CAMS air quality, Lahore).
-Put the raw CSV in the same folder as this script, then run: python clean_file1.py
+Run from the repo root: python clean_file1.py  (reads data/raw/validation/, writes data/processed/)
 The raw file is only read, never overwritten."""
+import os
 import pandas as pd
 
-RAW = "modeled_cams_lahore_daily_2022_2026.csv"
-OUT = "cleaned_modeled_cams_lahore_daily_2022_2026.csv"
+RAW = "data/raw/validation/modeled_cams_lahore_daily_2022_2026.csv"
+OUT = "data/processed/cleaned_modeled_cams_lahore_daily_2022_2026.csv"
 
 # Step 1: load raw file; treat the team's missing-value codes as NaN while reading
 MISSING = ["N/A", "n/a", "NA", "null", "NULL", "None", "?", "-", "", "nan"]
@@ -65,6 +66,7 @@ for c in ["pm2_5", "pm10", "dust"]:
 
 # Step 11: date back to YYYY-MM-DD text (team rule) and save
 df["date"] = df["date"].dt.strftime("%Y-%m-%d")
+os.makedirs(os.path.dirname(OUT), exist_ok=True)  # create data/processed/ if missing
 df.to_csv(OUT, index=False)
 
 # Step 12: before/after + change log
