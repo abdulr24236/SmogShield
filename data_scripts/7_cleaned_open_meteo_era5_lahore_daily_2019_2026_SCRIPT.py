@@ -1,10 +1,11 @@
 """clean_file3.py -- cleans open_meteo_era5_lahore_daily_2019_2026.csv (daily ERA5 weather, Lahore).
-Put the raw CSV in the same folder as this script, then run: python clean_file3.py
+Run from the repo root: python clean_file3.py  (reads data/raw/weather/, writes data/processed/)
 The raw file is only read, never overwritten."""
+import os
 import pandas as pd
 
-RAW = "open_meteo_era5_lahore_daily_2019_2026.csv"
-OUT = "cleaned_open_meteo_era5_lahore_daily_2019_2026.csv"
+RAW = "data/raw/weather/open_meteo_era5_lahore_daily_2019_2026.csv"
+OUT = "data/processed/cleaned_open_meteo_era5_lahore_daily_2019_2026.csv"
 
 # Step 1: the file starts with a 2-line location block + blank line, THEN the real table. Read both parts separately.
 MISSING = ["N/A", "n/a", "NA", "null", "NULL", "None", "?", "-", "", "nan"]
@@ -85,6 +86,7 @@ print(f"[9] rain_sum_mm equals precipitation_sum_mm on {same:.2f}% of days")
 
 # Step 10: no imputation; date back to YYYY-MM-DD text (team rule) and save
 df["date"] = df["date"].dt.strftime("%Y-%m-%d")
+os.makedirs(os.path.dirname(OUT), exist_ok=True)  # create data/processed/ if missing
 df.to_csv(OUT, index=False)
 
 # Step 11: before/after + change log
