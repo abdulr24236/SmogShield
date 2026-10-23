@@ -1,10 +1,11 @@
 """clean_file2.py -- cleans modeled_cams_lahore_hourly_2023_2025.csv (hourly CAMS pollutants + weather, Lahore).
-Put the raw CSV in the same folder as this script, then run: python clean_file2.py
+Run from the repo root: python clean_file2.py  (reads data/raw/validation/, writes data/processed/)
 The raw file is only read, never overwritten."""
+import os
 import pandas as pd
 
-RAW = "modeled_cams_lahore_hourly_2023_2025.csv"
-OUT = "cleaned_modeled_cams_lahore_hourly_2023_2025.csv"
+RAW = "data/raw/validation/modeled_cams_lahore_hourly_2023_2025.csv"
+OUT = "data/processed/cleaned_modeled_cams_lahore_hourly_2023_2025.csv"
 
 # Step 1: load raw file; treat the team's missing-value codes as NaN while reading
 MISSING = ["N/A", "n/a", "NA", "null", "NULL", "None", "?", "-", "", "nan"]
@@ -21,7 +22,7 @@ df["time"] = pd.to_datetime(df["time"].astype(str).str.strip(), format="%Y-%m-%d
 bad_ts = int(df["time"].isna().sum())
 df = df.dropna(subset=["time"])
 print(f"[3] rows dropped for unparseable timestamp: {bad_ts}")
-#the fix claude suggested for the pakistan and USA time zone issues. just adding the line below will fix it
+#the fix suggested for the pakistan and USA time zone issues. just adding the line below will fix it
 # Step 3b: raw timestamps are UTC -> convert to Pakistan time (Asia/Karachi, UTC+5), then drop the tz label so the CSV stays plain
 df["time"] = df["time"].dt.tz_localize("UTC").dt.tz_convert("Asia/Karachi").dt.tz_localize(None)
 
@@ -77,6 +78,7 @@ df = df.rename(columns={"time": "datetime"})
 df.insert(1, "date", df["datetime"].dt.strftime("%Y-%m-%d"))
 df.insert(2, "hour", df["datetime"].dt.hour)
 df["datetime"] = df["datetime"].dt.strftime("%Y-%m-%d %H:%M:%S")
+os.makedirs(os.path.dirname(OUT), exist_ok=True)  # create data/processed/ if missing
 df.to_csv(OUT, index=False)
 
 # Step 12: before/after + change log
