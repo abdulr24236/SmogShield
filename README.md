@@ -6,129 +6,93 @@
 
 SmogShield is an explainable AI-powered web application designed to help residents of Lahore understand air pollution and prepare for changing air-quality conditions.
 
-The project aims to forecast next-day PM2.5 concentrations and Air Quality Index (AQI) categories using historical air-quality, weather, and traffic-related data. When direct traffic data is unavailable, calendar-based proxies may be used.
+The project forecasts next-day PM2.5 concentrations and Air Quality Index (AQI) categories using historical air-quality and weather data, with calendar-based proxies standing in for traffic (no open, time-aligned Lahore traffic dataset was found).
 
-In addition to forecasting, SmogShield aims to communicate prediction uncertainty, explain the main factors influencing forecasts through feature-importance analysis, identify recurring pollution patterns, and highlight historically lower-pollution hours for outdoor activity planning.
+In addition to forecasting, SmogShield aims to communicate prediction uncertainty, explain the main factors behind forecasts through feature-importance analysis, identify recurring pollution patterns, and highlight historically lower-pollution hours for outdoor activity planning.
 
 ## Problem Statement
 
-Air pollution is a recurring environmental challenge in Lahore, particularly during the winter smog season. Current air-quality readings provide information about present conditions but may not fully explain the factors contributing to pollution or indicate what conditions could be like the following day.
-
-SmogShield aims to address this gap by combining air-quality forecasting, interpretable model outputs, and historical pollution analysis in an accessible web application.
+Air pollution is a recurring challenge in Lahore, particularly during the winter smog season. Current air-quality readings describe present conditions but do not explain what is driving pollution or what tomorrow is likely to bring. SmogShield addresses this gap by combining forecasting, interpretable model outputs and historical pollution analysis in an accessible web application.
 
 ## Objectives
 
-- **Next-Day Forecasting:** Forecast PM2.5 concentrations and AQI categories.
-- **Model Comparison:** Compare multiple machine-learning models to evaluate forecasting performance.
-- **Feature Evaluation:** Investigate whether weather and traffic-related features improve prediction accuracy.
-- **Explainability:** Identify the main factors influencing model predictions using feature-importance analysis.
-- **Uncertainty Estimation:** Provide prediction intervals to communicate forecast uncertainty.
-- **Pollution Pattern Analysis:** Examine recurring pollution patterns, including wintertime stagnant-smog conditions.
-- **Outdoor Planning:** Identify historically lower-pollution hours to support more informed outdoor activity planning.
+- **Next-day forecasting:** forecast PM2.5 and AQI categories.
+- **Model comparison:** compare several models against a persistence baseline.
+- **Feature evaluation:** test whether weather and calendar features improve accuracy (ablation study).
+- **Explainability:** identify the main factors behind predictions.
+- **Uncertainty:** provide prediction intervals.
+- **Pattern analysis:** examine recurring pollution patterns, including winter stagnant smog.
+- **Outdoor planning:** identify historically lower-pollution hours.
 
 ## Target Audience
 
-SmogShield is intended for:
+Residents of Lahore, pedestrians, cyclists and commuters planning outdoor activities, parents and schools, outdoor workers, and anyone interested in how weather relates to air pollution. SmogShield is not a medical tool and does not replace official health advisories.
 
-- Residents of Lahore seeking accessible air-quality information.
-- Pedestrians, cyclists, and people planning outdoor activities.
-- Commuters and visitors unfamiliar with local pollution patterns.
-- Individuals interested in understanding air pollution and its relationship with weather and other relevant factors.
+## Data
 
-## Data Sources
+**Datasets are not stored in this repository** (see `.gitignore`). Raw and cleaned files are on the shared Google Drive folder:
+<https://drive.google.com/drive/folders/1gRY4v3sCW90rdJ97O1RFDDux_Dxpd89Y>
 
-The project uses datasets obtained from sources including Kaggle, AQICN, and Zenodo. Individual dataset sources, licenses, and collection details will be documented as they are verified.
+Copy them into a local `data/` folder with this layout:
 
-### Processed Datasets
+```text
+data/
+├── raw/
+│   ├── ground_truth/   openaq_us_post_25135_hourly.csv
+│   ├── weather/        open_meteo_era5_lahore_daily_2019_2026.csv
+│   └── validation/     station_aqi_weather_lahore_daily_2019_2023.csv,
+│                       modeled_cams_lahore_hourly_2023_2025.csv,
+│                       modeled_cams_lahore_daily_2022_2026.csv, city_info.csv, data_dictionary.csv
+└── processed/          (created by the scripts)
+```
 
-- `lahore_us_post_pm25_daily_2019_2025.csv`
-- `lahore_us_post_pm25_hourly_2019_2025.csv`
+| Dataset | Role | Source |
+|---|---|---|
+| Hourly PM2.5, US Diplomatic Post Lahore | Main target | OpenAQ v3 API, sensor 25135 |
+| Daily weather (ERA5) | Features | Open-Meteo Historical Weather API |
+| Station AQI + weather, 2019-2023 | Cross-check | GitHub `taimoorbarlas15/Lahore_Air_Quality` |
+| CAMS hourly and daily (modelled) | Comparison only | Kaggle `aadbutt/dataset`; Zenodo 10.5281/zenodo.18673725 |
 
-### Raw Datasets
+Sources, licences, row counts and caveats for every file (including the ones we rejected) are in [`DATA_SOURCES.md`](DATA_SOURCES.md). Download evidence, hashes and exact requests are in `reports/data_collection_log.md`. Modelled (CAMS) data is never treated as ground truth.
 
-**Ground Truth**
-- `openaq_us_post_25135_hourly.csv`
+## Running the pipeline
 
-**Validation**
-- `city_info.csv`
-- `data_dictionary.csv`
-- `modeled_cams_lahore_daily_2022_2026.csv`
-- `modeled_cams_lahore_hourly_2023_2025.csv`
-- Station-level AQI and weather data — filename to be verified.
+Install the requirements once, then run the scripts from the project root, in order:
 
-**Weather**
-- `open_meteo_era5_lahore_daily_2019_2026.csv`
+```bash
+pip install -r requirements.txt
+python data_scripts/01_download_data.py        # optional: re-download sources (OpenAQ needs OPENAQ_API_KEY)
+python data_scripts/02_clean_pm25_simple.py    # hourly + daily PM2.5
+python data_scripts/03_pm25_aqi_and_eda.py     # AQI, category, 4 EDA charts
+python data_scripts/04_clean_station_simple.py # station AQI + weather
+# 05-07: clean ERA5 weather and the two CAMS files (see data_scripts/)
+python data_scripts/08_build_calendar.py       # calendar table
+python data_scripts/09_build_features.py       # feature table + 2 EDA charts
+```
 
-### Archived Datasets
-
-The `archive_unused` directory contains:
-
-- `lahore_complete_data_july_to_dec_2024.csv`
-- `pakistan_air_quality_annual_summary.csv`
-- `weather.csv`
-
-These files are retained for reference and are not necessarily included in the final modeling pipeline.
-
-## Methodology
-
-The planned project workflow consists of the following stages:
-
-1. **Data Acquisition:** Document dataset sources and collection methods.
-2. **Data Cleaning:** Inspect missing values, duplicate records, inconsistent data, and potential outliers.
-3. **Feature Engineering:** Prepare relevant air-quality, weather, temporal, and traffic-related features.
-4. **Exploratory Data Analysis:** Analyze distributions, correlations, and temporal pollution patterns.
-5. **Model Development:** Compare suitable machine-learning models for PM2.5 forecasting and AQI-category prediction.
-6. **Model Evaluation:** Evaluate predictive performance and assess the contribution of additional features.
-7. **Explainability and Uncertainty:** Analyze feature importance and develop prediction intervals.
-8. **Application Development:** Present forecasts and supporting explanations through a web interface.
-
-The final algorithms, evaluation metrics, and implementation details will be determined during development.
-
-## Technology Stack
-
-The technology stack is to be finalized. Python is planned for data processing and machine-learning development.
+Cleaning rules: raw files are never edited; the target is never filled; extreme values are flagged, not deleted; a day is usable only with at least 18 valid hours.
 
 ## Repository Structure
-
-The repository will organize project documentation, data-processing scripts, analysis outputs, and reports.
 
 ```text
 SmogShield/
 ├── README.md
-├── .gitignore
 ├── DATA_SOURCES.md
-├── data_scripts/
+├── requirements.txt
+├── .gitignore
+├── data_scripts/        Phase 2 code (01-09)
 ├── outputs/
-│   └── eda_charts/
-└── reports/
+│   └── eda_charts/      EDA figures used in the report
+└── reports/             LaTeX sources and the data collection log
 ```
 
-Large raw datasets will be managed separately where appropriate. Dataset access, attribution, and licensing requirements will be documented as they are verified.
-
-## Project Status
-
-**Current stage:** Problem definition and data foundations.
-
-- [x] Initial project objectives defined.
-- [x] Initial dataset inventory identified.
-- [ ] Dataset sources and licensing documented.
-- [ ] Data-cleaning scripts implemented.
-- [ ] Feature engineering completed.
-- [ ] Exploratory data analysis completed.
-- [ ] Machine-learning models selected and evaluated.
-- [ ] Forecast explanations and uncertainty estimates implemented.
-- [ ] Web application developed and evaluated.
-
-## Expected Outcome
-
-SmogShield aims to make air-quality forecasting more understandable by combining next-day predictions, explanations of influential factors, uncertainty estimates, and historical pollution analysis.
-
-The project is intended to support informed outdoor planning. Forecasts and associated guidance will require appropriate evaluation before being relied upon for real-world decisions.
 
 ## Team
 
-Team information will be added as the project documentation is finalized.
+- **Muhammad Haider Mughal (3006)** — calendar construction and feature engineering: public holidays, Ramadan/Eid flags, lagged and rolling features, and the EDA charts.
+- **Muhammad Ayub Butt (3076)** — data cleaning: CAMS daily/hourly validation data and ERA5 weather, including timezone and unit standardisation.
+- **Abdul Rehman (3059)** — data collection and provenance, OpenAQ PM2.5 station cleaning and the AQI pipeline, report integration and reproducibility checks.
 
 ## License
 
-The project license will be determined before public release. Third-party datasets remain subject to their respective licensing and attribution requirements.
+The project licence will be determined before public release. Third-party datasets remain subject to their own licensing and attribution requirements.

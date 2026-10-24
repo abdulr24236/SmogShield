@@ -1,0 +1,86 @@
+% Phase 1: Problem Definition (included by report_main_final.tex).
+% Needs in the main file's preamble: \usepackage{array,booktabs,enumitem}
+% and this line:  \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+% Citations resolve against the thebibliography block in report_main_final.tex.
+
+\section{Phase 1: Problem Definition}
+
+\subsection{Problem Statement}
+
+Lahore experiences recurring episodes of severe air pollution, most visibly during the winter ``smog season'' that roughly spans October to February~\cite{majeed2024lahore}. The pollutant most often used to describe these episodes is fine particulate matter (PM$_{2.5}$), particles smaller than 2.5~$\mu$m that can be inhaled deeply~\cite{who2024ambient,epa_pm_basics}.
+
+Our own data shows how persistent the problem is. The US Diplomatic Post monitor in Lahore recorded at least 18 valid hourly readings on 1{,}506 days between May 2019 and March 2025. Converting each day's mean PM$_{2.5}$ to the US EPA Air Quality Index (AQI, 2012 breakpoints)~\cite{epa_aqi_tad}, only 9 of those days (0.6\%) fell in the ``Good'' category, while 1{,}102 days (73.2\%) were ``Unhealthy'' or worse. These figures come from a single monitor and from days with enough valid readings, so they describe the data we have rather than the whole city.
+
+\paragraph{The pain point.} A resident deciding whether to cycle to work, hold a school sports session, or work outdoors tomorrow needs three things: a forecast, an idea of how reliable it is, and a reason for it. Air-quality information is commonly presented as a current reading, which leaves three gaps:
+\begin{itemize}
+  \item \textbf{Timing:} a current value does not say what tomorrow will look like.
+  \item \textbf{Trust:} a single number gives no sense of how uncertain it is.
+  \item \textbf{Understanding:} people are rarely told which conditions (for example calm air, cold temperatures, high humidity) are driving the pollution.
+\end{itemize}
+
+\paragraph{Our solution.} SmogShield Lahore is a web application that forecasts the next day's PM$_{2.5}$ level and AQI category for Lahore from historical air-quality and weather data (with calendar-based proxies where traffic data is unavailable). Each forecast comes with a prediction interval, the main factors the model relied on, and cautious, non-medical guidance. The project also studies recurring seasonal pollution patterns and tests whether adding weather and calendar information improves forecast accuracy.
+
+\subsection{Target Audience}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{L{3.6cm}L{4.6cm}L{5.6cm}}
+\toprule
+\textbf{User group} & \textbf{Decision they face} & \textbf{What SmogShield provides} \\
+\midrule
+Commuters, cyclists and runners & Whether to travel or exercise outdoors tomorrow & Next-day AQI category with an uncertainty range \\
+Parents and schools & Whether to hold outdoor activities & Category-based, cautious guidance \\
+Outdoor workers & Planning the working day & Forecast and typical cleaner hours from historical patterns \\
+Residents who may be sensitive to air pollution, and their carers & Deciding how cautious to be & The forecast category and the factors behind it (not medical advice) \\
+Students and researchers & Assessing a transparent baseline & Documented data, models and limitations \\
+\bottomrule
+\end{tabular}
+\caption{Target users and how the application supports their decisions.}
+\end{table}
+
+The primary audience is the general public in Lahore. SmogShield is not a medical tool and does not replace official public-health advisories.
+
+\subsection{AI Justification}
+
+A rule-based system would encode expert thresholds such as ``if wind speed is below X and humidity is above Y, predict poor air quality.'' Machine-learning models have already been used to forecast Lahore's AQI from historical series~\cite{waqas2024lahore}; SmogShield extends this line by forecasting next-day PM$_{2.5}$ with weather and calendar inputs and by attaching uncertainty and explanations to each forecast. We argue that machine learning is better suited to this problem for the following reasons.
+
+\begin{enumerate}
+  \item \textbf{Many interacting factors.} Tomorrow's PM$_{2.5}$ depends on today's level and on wind speed and direction, humidity, dew point, temperature, pressure, rainfall and the time of year. The effect of one factor depends on the others (for example, calm air matters most when it is also cold and humid). Writing and justifying thresholds for every combination by hand does not scale, whereas learning algorithms such as tree ensembles fit these interactions directly from data.
+  \item \textbf{Relationships change with the season.} The same wind speed does not mean the same thing in a monsoon July and in a December smog episode. Rules would need separate hand-tuned sets for each regime. A model trained on several years of data can learn these differences.
+  \item \textbf{Uncertainty has to be estimated.} A fixed rule gives a single answer. Learned models allow prediction intervals to be estimated from historical forecast errors (for example with quantile regression), which supports the trust gap described above.
+  \item \textbf{The data is suitable.} We have an observed daily PM$_{2.5}$ series with 1{,}506 usable days, together with more than 2{,}600 days of daily weather. This is a tabular supervised learning problem with enough rows for tree-based models and regularised linear models, and possibly a small recurrent network for comparison.
+  \item \textbf{Maintainability.} When new data arrives, a model can be retrained and re-evaluated. A rule set must be re-tuned manually.
+  \item \textbf{Complement to physical models.} Atmospheric models exist, but a modeled air-quality dataset we examined during Phase 2 read about half as high as the monitor on overlapping days and under-read smog peaks. A statistical model trained on local observations is a practical complement.
+\end{enumerate}
+
+\paragraph{An honest counterpoint.} Daily pollution is strongly persistent, so a simple baseline that predicts ``tomorrow equals today'' is hard to beat. For this reason we compare every learned model against that persistence baseline and against simple linear models. We claim a benefit from machine learning only where the evaluation shows one.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{L{4.0cm}L{4.9cm}L{4.9cm}}
+\toprule
+\textbf{Aspect} & \textbf{Rule-based} & \textbf{Machine learning} \\
+\midrule
+Factor interactions & Hand-written, limited & Learned from data \\
+Seasonal differences & Separate rule sets & Learned, can use season as input \\
+Uncertainty & Not provided & Estimated from past errors \\
+Updating & Manual re-tuning & Retrain on new data \\
+Evidence of accuracy & Hard to measure fairly & Compared with baselines on held-out data \\
+\bottomrule
+\end{tabular}
+\caption{Why a learned model is preferred over fixed rules for this problem.}
+\end{table}
+
+\subsection{Research Questions and Scope}
+
+\begin{enumerate}
+  \item[\textbf{RQ1}] Can machine learning models forecast next-day PM$_{2.5}$ and AQI category better than a persistence baseline?
+  \item[\textbf{RQ2}] Does adding weather, and then calendar information, improve accuracy compared with air-quality history alone (ablation study)?
+  \item[\textbf{RQ3}] Where do the models fail? We examine errors by season and on extreme-pollution days.
+\end{enumerate}
+
+\paragraph{Scope and limitations.} The forecast is for the next day at daily resolution, for Lahore, based mainly on one reference monitor. Traffic is represented by calendar proxies because no open, time-aligned Lahore traffic dataset was found. The data has gaps, and the evaluation uses a time-based split so that no future information leaks into training. The application gives cautious guidance and is not medical advice.
+
+% References are listed in the thebibliography block of report_main_final.tex.
