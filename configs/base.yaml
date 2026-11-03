@@ -27,8 +27,13 @@ data:
 
   # Derived/duplicated columns that should not be model inputs.
   # season has explicit season_* dummies in the feature table.
+  # year is kept in the feature table for EDA but excluded from modelling:
+  # training ends in 2023 while validation/test continue to 2025, so tree
+  # models cannot extrapolate it and linear/neural models may invent a trend.
+  # month, day_of_year and the cyclical encodings carry the seasonality.
   drop_columns:
     - season
+    - year
 
   # The Phase 2 table contains robust-scaled weather columns computed on all
   # rows. Using them would leak validation/test statistics into training, so
@@ -39,10 +44,18 @@ data:
   categorical_features:
     - aqi_category
 
-  # Order follows the US EPA PM2.5 bands used in 03_pm25_aqi_and_eda.py.
+  # Good has only 9 training rows and none in validation/test. Merge it with
+  # Moderate for the classification target so every class has support in every
+  # split. The raw feature table still keeps the original seven categories.
+  label_merge:
+    Good: "Good/Moderate"
+    Moderate: "Good/Moderate"
+
+  # Six-class ordinal order after the Good/Moderate merge. The two Hazardous
+  # bands are kept separate but their small validation/test support must be
+  # reported as a limitation.
   classification_labels:
-    - Good
-    - Moderate
+    - "Good/Moderate"
     - Unhealthy for Sensitive
     - Unhealthy
     - Very Unhealthy

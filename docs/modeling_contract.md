@@ -9,8 +9,11 @@ functions.
 **Primary task: next-day AQI-category classification.**
 
 - Target: `target_next_aqi_category`
-- Classes: Good, Moderate, Unhealthy for Sensitive, Unhealthy, Very Unhealthy,
+- Classes: Good/Moderate, Unhealthy for Sensitive, Unhealthy, Very Unhealthy,
   Hazardous (301-400), Hazardous (401-500)
+- The raw table keeps Good and Moderate separate. For modelling, Good is merged
+  into Moderate because it has only 9 training rows and zero validation/test
+  rows. This yields six classes, all present in every split.
 - This is the task used for the Precision, Recall, F1 and AUC-ROC analysis
   required by Phase 4.
 
@@ -44,8 +47,8 @@ The current generated table has:
 - 1,294 rows with a next-day target, lag 3 and all weather values.
 
 Re-check these numbers with `python -m src.check_setup` after regenerating the
-file. The cleaned daily AQI series has 1,506 usable days. Its category counts
-are:
+file. The cleaned daily AQI series has 1,506 usable days. Its raw category
+counts are:
 
 | Category | Days |
 |---|---:|
@@ -57,20 +60,18 @@ are:
 | Hazardous (301-400) | 139 |
 | Hazardous (401-500) | 60 |
 
-The “Good” class is very rare. In the current date split it appears only in the
-training period (9 rows) and is absent from validation and test. Its per-class
-recall and one-vs-rest AUC therefore cannot be estimated on those splits. Do not
-hide this: report per-class recall and macro F1, state that Good has no test
-support, and discuss the instability of macro metrics for rare classes. A
-coarser grouping may be used only as a sensitivity analysis, not as the primary
-target.
+The raw Good class is too rare to model separately: it has 9 training rows and
+zero validation/test rows, so its per-class recall and one-vs-rest AUC cannot be
+estimated on those splits. The classification target therefore merges Good into
+Moderate through `data.label_merge` in `configs/base.yaml`. This is a modelling
+decision, not a data deletion; the raw table still contains all seven
+categories. Report the merge and the raw counts.
 
-Current class support by split:
+The resulting six-class support by split is:
 
 | Category | Train | Validation | Test |
 |---|---:|---:|---:|
-| Good | 9 | 0 | 0 |
-| Moderate | 100 | 16 | 8 |
+| Good/Moderate | 109 | 16 | 8 |
 | Unhealthy for Sensitive | 175 | 53 | 34 |
 | Unhealthy | 488 | 80 | 77 |
 | Very Unhealthy | 148 | 47 | 61 |
@@ -78,9 +79,16 @@ Current class support by split:
 | Hazardous (401-500) | 30 | 11 | 19 |
 | **Total** | **1,022** | **250** | **223** |
 
-`ModelData.summary()["class_counts"]` returns this table, and
-`class_support_warnings` names every class with zero support in a split. The
-generated table must be included in the report.
+Every class now has support in every split, so multiclass AUC-ROC is defined.
+The 8 test rows in Good/Moderate and 11 validation rows in Hazardous
+(401-500) are still small; report their per-class precision/recall as noisy
+rather than treating them as precise estimates. The two Hazardous bands are
+kept separate; merging them is allowed only as a documented sensitivity
+analysis.
+
+`ModelData.summary()["class_counts"]` returns this six-class table and
+`ModelData.label_merge` records the merge. `class_support_warnings` still names
+any future class with zero support. The support table must appear in the report.
 
 ## 3. Split
 
@@ -95,6 +103,13 @@ Chronological split with a purge gap:
 The table shows the current data. The validation/test *boundaries* in
 `configs/base.yaml` are 2024-06-30 and the last available date; the actual last
 usable row can be earlier because rows without a next-day target are dropped.
+The actual validation end is 2024-06-03, not 2024-06-30; the remaining June days
+do not have a usable next-day target. This is expected, not a config typo.
+
+The feature table has one row per calendar day (2,113 rows over a 2,113-day
+span). The lower usable counts in each split come from missing PM2.5/target
+values, not from missing calendar rows. `python -m src.check_setup` verifies
+that `target_next_pm25` and `pm25_lag1` match the adjacent calendar dates.
 
 `gap_days = 7` removes 2023-07-01..2023-07-07 and 2024-07-01..2024-07-07. The
 gap prevents next-day targets at the end of one period from overlapping the
@@ -110,9 +125,10 @@ Rules:
 - Touch the test split once, after the model and hyperparameters are frozen.
 - Report all three row counts and date ranges.
 - For tuning, use `data.X_train_raw` with
-  `data.make_model_pipeline(estimator)` and `TimeSeriesSplit`. Do not
-  cross-validate on `data.X_train`: its preprocessor has already seen the whole
-  training split, including each fold's held-out rows.
+  `data.make_model_pipeline(estimator)` and
+  `TimeSeriesSplit(n_splits=..., gap=7)`. Do not cross-validate on
+  `data.X_train`: its preprocessor has already seen the whole training split,
+  including each fold's held-out rows.
 
 ## 4. Features and leakage
 
@@ -122,6 +138,10 @@ The shared loader in `src/data.py`:
 - drops the precomputed `*_scaled` weather columns, because Phase 2 scaled them
   on all rows;
 - drops the redundant `season` string because `season_*` dummies already exist;
+- drops `year` from model inputs because training ends in 2023 while
+  validation/test continue to 2025; trees cannot extrapolate unseen years and
+  linear/neural models may extrapolate an unstable trend. `month`,
+  `day_of_year` and the cyclical encodings carry the seasonality;
 - keeps current-day PM2.5, AQI, weather and calendar features;
 - one-hot encodes `aqi_category` and median-imputes numeric features;
 - applies `RobustScaler` to numeric features after fitting on train only.
@@ -130,7 +150,9 @@ The loader has a hard guard that raises if any `target_*` or `*_scaled` column
 survives the config lists. Do not remove this guard to work around a config
 typo; fix the config instead. The class labels are also required in
 `configs/base.yaml`; they are never inferred from the data, because that would
-make the order alphabetical and include validation/test labels.
+make the order alphabetical and include validation/test labels. The optional
+`label_merge` mapping is applied only to the classification target, before
+encoding.
 
 No model may add a feature derived from `shift(-1)` or from the test period.
 Any new feature must be added to the shared loader or explicitly documented and
@@ -149,10 +171,11 @@ Classification:
 - One-vs-rest macro AUC-ROC
 - Confusion matrix and per-class precision/recall/F1
 
-Macro metrics are primary because the classes are imbalanced. AUC-ROC is
-reported when probabilities are available; it is undefined if a class is absent
-from the evaluation set, and that limitation must be stated rather than filled
-with a fake value.
+Macro metrics are primary because the classes are imbalanced. The six-class
+target has support for every class in every split, so multiclass AUC-ROC is
+defined. If a future split lacks a class, leave that metric undefined rather
+than filling it with a fake value. Report the support table and note that the
+per-class estimates for Good/Moderate and Hazardous (401-500) are noisy.
 
 Regression:
 
@@ -165,17 +188,29 @@ Regression:
 Classification:
 
 1. Majority class.
-2. Logistic regression with class weights.
-3. Histogram gradient boosting.
-4. Optional: a small MLP, if it improves validation performance.
+2. Persistence: tomorrow's category = today's `aqi_category`.
+3. Logistic regression with class weights.
+4. Histogram gradient boosting.
+5. Optional: a small MLP, if it improves validation performance.
 
 Regression:
 
-1. Persistence: tomorrow = today.
+1. Persistence: tomorrow's PM2.5 = today's `pm25`.
 2. Ridge regression.
 3. Histogram gradient boosting.
 
-Every model must be compared with its baseline on the same validation split.
+The shared helpers are in `src/evaluate.py`:
+
+- `majority_class_predictions(y_train, n_samples)`
+- `persistence_class_predictions(current_categories, labels, label_merge,
+  fallback)`
+- `persistence_regression_predictions(current_pm25, fallback)`
+
+For persistence, pass the majority-class code or training median as
+`fallback` when today's value is missing, and state which fallback was used.
+Persistence is a strong baseline because AQI and PM2.5 are strongly
+autocorrelated; every model must beat it on the same validation and test rows,
+not just beat the majority class.
 
 ## 7. Error analysis and bias check
 
@@ -188,6 +223,13 @@ Subgroups to examine:
 - Ramadan and Eid periods
 - Public holidays
 - PM2.5 range / pollution severity
+
+The class mix shifts across periods. `Unhealthy` is about 48% of training rows
+but 32% of validation and 35% of test. The two Hazardous bands together are
+about 10% of training but 22% of validation and 19% of test. This may reflect
+seasonal composition, missing training days/targets, or real worsening; do not
+assume one cause. Expect models to under-predict severity on the later data and
+report that possibility rather than claiming a causal trend.
 
 The dataset contains one monitoring station and no demographic attributes.
 State this explicitly: the bias check is environmental and temporal, not
@@ -203,6 +245,15 @@ high-pollution days, winter smog episodes, or particular years.
 - Each script must be runnable from the repository root.
 - Every result in the report must be reproducible from a committed script and
   the shared data.
+- `python -m src.check_setup` must report 0 bad next-day targets and 0 bad
+  lag-1 values. The feature table is complete daily; target/lag missingness
+  comes from missing PM2.5 values, not row-shift gaps.
+- `09_build_features.py` has no future or whole-dataset fill for PM2.5. Its only
+  fill is `fillna(0)` for calendar flags after merging the calendar table. The
+  `*_scaled` columns use all-row statistics and are explicitly excluded from
+  modelling. The separate `04_clean_station_simple.py` cross-check uses
+  backward-only `ffill(limit=3)` for weather averages; it does not feed the
+  model table.
 - Use Git CLI for add/commit/push. Do not use the GitHub “Upload Files” button.
 
 ## 9. Code ownership

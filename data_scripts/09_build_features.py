@@ -239,6 +239,9 @@ def build_features(pm25: pd.DataFrame, weather: pd.DataFrame) -> pd.DataFrame:
         print("[note] calendar_daily.csv not found: using the simplified built-in holiday list")
 
     # --- target: tomorrow's PM2.5 (never use today's value as a feature without lag)
+    # Missing PM2.5 values stay missing. Do not interpolate/ffill/bfill here:
+    # the loader imputes from training rows only, and future-aware filling
+    # would leak information across the chronological split.
     df["target_next_pm25"] = df["pm25"].shift(-1)
     df["target_next_log"] = np.log1p(df["target_next_pm25"])
     if "aqi_category" in df.columns:  # classification target: tomorrow's AQI category

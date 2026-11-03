@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -137,6 +139,73 @@ def classification_metrics(
         ).tolist(),
         "per_class": report,
     }
+
+
+def majority_class_predictions(
+    y_train: np.ndarray | list[int],
+    n_samples: int,
+) -> np.ndarray:
+    """Predict the most frequent training class for every evaluation row."""
+    y = np.asarray(y_train)
+    if y.size == 0:
+        raise ValueError("Cannot build a majority baseline from an empty y_train.")
+    values, counts = np.unique(y, return_counts=True)
+    majority = int(values[int(np.argmax(counts))])
+    return np.full(int(n_samples), majority, dtype=int)
+
+
+def persistence_class_predictions(
+    current_categories: Sequence[Any],
+    labels: Sequence[str],
+    label_merge: Mapping[str, str] | None = None,
+    fallback: int | None = None,
+) -> np.ndarray:
+    """Predict tomorrow's category from today's observed AQI category.
+
+    ``fallback`` is the encoded class used when today's category is missing.
+    Pass the majority-class code for a fully defined baseline, or leave it as
+    ``None`` to fail loudly on missing current categories.
+    """
+    mapping = {str(label): index for index, label in enumerate(labels)}
+    merge = {
+        str(source): str(destination)
+        for source, destination in (label_merge or {}).items()
+    }
+    predictions: list[int] = []
+    for value in current_categories:
+        if pd.isna(value):
+            if fallback is None:
+                raise ValueError(
+                    "Persistence baseline found a missing current AQI category; "
+                    "provide fallback=<majority-class code>."
+                )
+            predictions.append(int(fallback))
+            continue
+
+        key = merge.get(str(value), str(value))
+        if key not in mapping:
+            raise ValueError(
+                f"Current category {value!r} maps to unknown label {key!r}. "
+                f"Known labels: {list(mapping)}"
+            )
+        predictions.append(mapping[key])
+    return np.asarray(predictions, dtype=int)
+
+
+def persistence_regression_predictions(
+    current_pm25: Sequence[float],
+    fallback: float | None = None,
+) -> np.ndarray:
+    """Predict tomorrow's PM2.5 as today's observed PM2.5.
+
+    If ``fallback`` is provided, it replaces missing current-day PM2.5 values.
+    Otherwise missing values are returned as NaN and the metric function will
+    evaluate only the finite pairs.
+    """
+    values = np.asarray(current_pm25, dtype=float)
+    if fallback is not None:
+        values = np.where(np.isfinite(values), values, float(fallback))
+    return values
 
 
 def regression_metrics(

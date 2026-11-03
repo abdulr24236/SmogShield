@@ -298,7 +298,32 @@ def classification_labels(config: dict[str, Any]) -> list[str]:
         raise ValueError("At least two classification labels are required.")
     if len(labels) != len(set(labels)):
         raise ValueError(f"Duplicate classification labels: {labels}")
+
+    merge = config["data"].get("label_merge", {})
+    if merge:
+        if not isinstance(merge, dict):
+            raise ValueError("data.label_merge must be a mapping of label -> label.")
+        merged_values = {str(value) for value in merge.values()}
+        missing = sorted(merged_values - set(labels))
+        if missing:
+            raise ValueError(
+                f"label_merge produces labels absent from "
+                f"classification_labels: {missing}"
+            )
     return labels
+
+
+def apply_label_merge(
+    target: pd.Series, config: dict[str, Any]
+) -> pd.Series:
+    """Apply the configured class merge before encoding the target."""
+    merge = config["data"].get("label_merge", {})
+    if not merge:
+        return target
+    if not isinstance(merge, dict):
+        raise ValueError("data.label_merge must be a mapping of label -> label.")
+    mapping = {str(source): str(destination) for source, destination in merge.items()}
+    return target.replace(mapping)
 
 
 def encode_classification_target(
@@ -357,6 +382,7 @@ class ModelData:
     categorical_features: list[str]
     feature_names: list[str]
     labels: list[str] | None
+    label_merge: dict[str, str]
     split: ChronologicalSplit
 
     def summary(self) -> dict[str, Any]:
@@ -372,6 +398,8 @@ class ModelData:
             ),
             "split": self.split.summary(),
         }
+        if self.label_merge:
+            result["label_merge"] = self.label_merge
         if self.labels is not None:
             counts = {
                 "train": class_counts(self.y_train, self.labels),
@@ -441,8 +469,20 @@ def prepare_model_data(
             f"Target {target_name!r} not found. Columns: {list(df.columns)}"
         )
 
+    label_merge: dict[str, str] = {}
     if task == "classification":
         df[target_name] = df[target_name].replace(r"^\s*$", np.nan, regex=True)
+        df[target_name] = apply_label_merge(df[target_name], config)
+        merge = config["data"].get("label_merge", {})
+        if merge:
+            if not isinstance(merge, dict):
+                raise ValueError(
+                    "data.label_merge must be a mapping of label -> label."
+                )
+            label_merge = {
+                str(source): str(destination)
+                for source, destination in merge.items()
+            }
     else:
         df[target_name] = pd.to_numeric(df[target_name], errors="coerce")
 
@@ -529,5 +569,6 @@ def prepare_model_data(
         categorical_features=categorical,
         feature_names=feature_names,
         labels=labels,
+        label_merge=label_merge,
         split=split,
     )
