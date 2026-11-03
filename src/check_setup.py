@@ -88,6 +88,20 @@ def main() -> None:
             f"validation={summary['validation_rows']}  "
             f"test={summary['test_rows']}"
         )
+        scorable = summary["scorable_rows"]
+        dropped = summary["scorable_rows_dropped"]
+        print(
+            "  scorable: "
+            f"train={scorable['train']}  "
+            f"validation={scorable['validation']}  "
+            f"test={scorable['test']}"
+        )
+        print(
+            "  dropped:  "
+            f"train={dropped['train']}  "
+            f"validation={dropped['validation']}  "
+            f"test={dropped['test']}"
+        )
         split = summary["split"]
         print(f"  train:    {split['train_range'][0]} -> {split['train_range'][1]}")
         print(

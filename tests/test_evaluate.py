@@ -62,6 +62,30 @@ class ClassificationMetricTests(unittest.TestCase):
         self.assertAlmostEqual(metrics["roc_auc_ovr_macro"], 1.0)
         self.assertIsNone(metrics["roc_auc_note"])
 
+    def test_probability_rows_within_tolerance_are_renormalized(self) -> None:
+        scores = np.array(
+            [[0.90005, 0.10005], [0.20005, 0.80005],
+             [0.80005, 0.20005], [0.30005, 0.70005]]
+        )
+        metrics = classification_metrics(
+            [0, 1, 0, 1],
+            [0, 1, 0, 1],
+            y_score=scores,
+            labels=[0, 1],
+        )
+        self.assertAlmostEqual(metrics["roc_auc_ovr_macro"], 1.0)
+        self.assertIsNone(metrics["roc_auc_note"])
+
+    def test_probability_rows_outside_tolerance_raise(self) -> None:
+        scores = np.array([[0.9, 0.1002], [0.2, 0.8]])
+        with self.assertRaises(ValueError):
+            classification_metrics(
+                [0, 1],
+                [0, 1],
+                y_score=scores,
+                labels=[0, 1],
+            )
+
     def test_undefined_auc_is_reported_not_hidden(self) -> None:
         y_true = np.array([0, 1])
         y_pred = np.array([0, 1])

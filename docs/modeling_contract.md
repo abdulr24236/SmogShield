@@ -130,6 +130,13 @@ Rules:
   `data.X_train`: its preprocessor has already seen the whole training split,
   including each fold's held-out rows.
 
+The test split is touched once per final model. Choose hyperparameters with
+training-only time-series CV and/or the validation split, freeze the model, and
+then evaluate it once on test. Train the final model on the training split only,
+not on train plus validation. Refitting on train plus validation after looking
+at validation would make validation an optimistic, post-hoc estimate and would
+change the model after the test decision has been made.
+
 ## 4. Features and leakage
 
 The shared loader in `src/data.py`:
@@ -144,6 +151,9 @@ The shared loader in `src/data.py`:
   `day_of_year` and the cyclical encodings carry the seasonality;
 - keeps current-day PM2.5, AQI, weather and calendar features;
 - one-hot encodes `aqi_category` and median-imputes numeric features;
+- adds missing-value indicators to both imputers. Lag missingness is 29.3% in
+  train, 8.0% in validation and 1.3% in test, so the indicator is informative
+  rather than noise. The imputers are fitted on train only;
 - applies `RobustScaler` to numeric features after fitting on train only.
 
 The loader has a hard guard that raises if any `target_*` or `*_scaled` column
@@ -179,9 +189,11 @@ in `roc_auc_note` and emits a warning. Report the support table and note that
 the per-class estimates for Good/Moderate and Hazardous (401-500) are noisy.
 
 `classification_metrics` requires `labels` whenever `y_score` is passed,
-validates that the probability matrix has one column per label and rows that
-sum to 1, and returns `class_names` for the confusion matrix. For scikit-learn
-models, call `align_proba(model.predict_proba(X), model.classes_,
+validates that the probability matrix has one column per label, and returns
+`class_names` for the confusion matrix. Rows must sum to 1 within `1e-4`;
+the helper renormalizes only inside that tolerance, which removes float32
+softmax noise, and raises for anything further off. For scikit-learn models,
+call `align_proba(model.predict_proba(X), model.classes_,
 len(data.labels))` before passing the result. This keeps probability columns in
 the fixed class-code order even if a model saw fewer classes.
 
@@ -194,10 +206,23 @@ Regression:
 
 `regression_metrics` raises when targets are non-finite. Non-finite predictions
 also raise unless `allow_missing=True`; only the persistence baseline should use
-that option. It returns `n_dropped`, and every method must be scored on the same
-finite rows so the comparison is fair. For very small slices, report the support
-`n`; if a confidence interval is needed, use bootstrap resampling in the report
-rather than presenting a point estimate as precise.
+that option, and it must report `n_dropped`. For very small slices, report the
+support `n`; if a confidence interval is needed, use bootstrap resampling in the
+report rather than presenting a point estimate as precise.
+
+`ModelData.scorable_rows` defines the single evaluation row set for each split:
+rows where today's `pm25` is finite. The masks are aligned with the raw frames
+and target Series, and `ModelData.summary()` reports how many rows are kept and
+dropped. Apply `data.scorable_rows[split]` to every method, including
+persistence, so no model is scored on rows where persistence had to impute the
+current-day value. Do not use the mask to change training rows.
+
+```python
+mask = data.scorable_rows["validation"]
+y_true = data.y_validation[mask].to_numpy()
+y_pred = predictions[mask.to_numpy()]
+# Also filter y_score and any per-row analysis with the same mask.
+```
 
 ## 6. Baselines
 
@@ -222,11 +247,14 @@ The shared helpers are in `src/evaluate.py`:
   fallback)`
 - `persistence_regression_predictions(current_pm25, fallback)`
 
-For persistence, pass the majority-class code or training median as
-`fallback` when today's value is missing, and state which fallback was used.
-Persistence is a strong baseline because AQI and PM2.5 are strongly
-autocorrelated; every model must beat it on the same validation and test rows,
-not just beat the majority class.
+For the classification persistence baseline, pass the majority-class code as
+`fallback` when today's category is missing, and state which fallback was used.
+For regression persistence, do not fill missing current-day PM2.5 values; score
+it on `data.scorable_rows[split]` like every other method. If a caller evaluates
+the unfiltered persistence output instead, `allow_missing=True` is permitted
+only for that baseline and `n_dropped` must be reported. Persistence is a strong
+baseline because AQI and PM2.5 are strongly autocorrelated; every model must beat
+it on the same validation and test rows, not just beat the majority class.
 
 ## 7. Error analysis and bias check
 
@@ -257,7 +285,9 @@ high-pollution days, winter smog episodes, or particular years.
 - Python dependencies are in `requirements.txt`.
 - Random seed: `42` from `configs/base.yaml`.
 - Data and large model artifacts stay out of Git; use the shared Drive or a
-  release link.
+  release link. `.gitignore` covers `__pycache__/`, `data/processed/`, model
+  binaries and generated model result/chart files; the folder README
+  placeholders remain tracked.
 - Each script must be runnable from the repository root.
 - Every result in the report must be reproducible from a committed script and
   the shared data.

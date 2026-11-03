@@ -94,12 +94,19 @@ def classification_metrics(
                     f"expected {len(labels)}."
                 )
             row_sums = scores.sum(axis=1)
-            if np.any(row_sums <= 0) or not np.allclose(
-                row_sums, 1.0, atol=1e-6
-            ):
+            if not np.isfinite(row_sums).all() or np.any(row_sums <= 0):
                 raise ValueError(
-                    "y_score rows must sum to 1; pass probabilities, not logits."
+                    "y_score rows must have finite, positive sums; pass "
+                    "probabilities, not logits."
                 )
+            if not np.allclose(row_sums, 1.0, atol=1e-4):
+                raise ValueError(
+                    "y_score rows must sum to 1 within 1e-4; pass "
+                    "probabilities, not logits."
+                )
+            # Remove float32 softmax noise before AUC. This is safe only after
+            # the tolerance check above; arbitrary decision scores still raise.
+            scores = scores / row_sums[:, None]
         else:
             raise ValueError("y_score must be 1-D or 2-D.")
 

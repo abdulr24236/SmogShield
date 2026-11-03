@@ -251,7 +251,13 @@ def make_preprocessor(
                 "numeric",
                 Pipeline(
                     steps=[
-                        ("imputer", SimpleImputer(strategy="median")),
+                        (
+                            "imputer",
+                            SimpleImputer(
+                                strategy="median",
+                                add_indicator=True,
+                            ),
+                        ),
                         ("scaler", RobustScaler()),
                     ]
                 ),
@@ -264,7 +270,13 @@ def make_preprocessor(
                 "categorical",
                 Pipeline(
                     steps=[
-                        ("imputer", SimpleImputer(strategy="most_frequent")),
+                        (
+                            "imputer",
+                            SimpleImputer(
+                                strategy="most_frequent",
+                                add_indicator=True,
+                            ),
+                        ),
                         (
                             "onehot",
                             OneHotEncoder(
@@ -421,7 +433,46 @@ class ModelData:
             }
             if missing:
                 result["class_support_warnings"] = missing
+
+        masks = self.scorable_rows
+        result["scorable_rows"] = {
+            name: int(mask.sum()) for name, mask in masks.items()
+        }
+        result["scorable_rows_dropped"] = {
+            name: int((~mask).sum()) for name, mask in masks.items()
+        }
         return result
+
+    @property
+    def scorable_rows(self) -> dict[str, pd.Series]:
+        """Boolean masks for rows where today's ``pm25`` is finite.
+
+        The masks are aligned with the raw frames and the target Series. Every
+        model and baseline must score on the same mask, so a model cannot gain
+        an advantage by imputing today's PM2.5 while persistence cannot use it.
+        Do not use these masks to change training rows; they define evaluation
+        rows only.
+        """
+        masks: dict[str, pd.Series] = {}
+        for name, frame in (
+            ("train", self.X_train_raw),
+            ("validation", self.X_validation_raw),
+            ("test", self.X_test_raw),
+        ):
+            if "pm25" not in frame.columns:
+                raise KeyError(
+                    "Cannot define scorable rows: current-day 'pm25' is not a "
+                    "model feature."
+                )
+            values = pd.to_numeric(frame["pm25"], errors="coerce").to_numpy(
+                dtype=float
+            )
+            masks[name] = pd.Series(
+                np.isfinite(values),
+                index=frame.index,
+                name="scorable",
+            )
+        return masks
 
     def make_model_pipeline(self, estimator: Any) -> Pipeline:
         """Return an unfitted preprocessor + estimator pipeline for tuning.
