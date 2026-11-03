@@ -174,14 +174,30 @@ Classification:
 Macro metrics are primary because the classes are imbalanced. The six-class
 target has support for every class in every split, so multiclass AUC-ROC is
 defined. If a future split lacks a class, leave that metric undefined rather
-than filling it with a fake value. Report the support table and note that the
-per-class estimates for Good/Moderate and Hazardous (401-500) are noisy.
+than filling it with a fake value; `classification_metrics` records the reason
+in `roc_auc_note` and emits a warning. Report the support table and note that
+the per-class estimates for Good/Moderate and Hazardous (401-500) are noisy.
+
+`classification_metrics` requires `labels` whenever `y_score` is passed,
+validates that the probability matrix has one column per label and rows that
+sum to 1, and returns `class_names` for the confusion matrix. For scikit-learn
+models, call `align_proba(model.predict_proba(X), model.classes_,
+len(data.labels))` before passing the result. This keeps probability columns in
+the fixed class-code order even if a model saw fewer classes.
 
 Regression:
 
 - RMSE
 - MAE
 - R²
+- Optional `rmse_skill_vs_persistence = 1 - rmse_model / rmse_persistence`
+
+`regression_metrics` raises when targets are non-finite. Non-finite predictions
+also raise unless `allow_missing=True`; only the persistence baseline should use
+that option. It returns `n_dropped`, and every method must be scored on the same
+finite rows so the comparison is fair. For very small slices, report the support
+`n`; if a confidence interval is needed, use bootstrap resampling in the report
+rather than presenting a point estimate as precise.
 
 ## 6. Baselines
 
@@ -248,6 +264,9 @@ high-pollution days, winter smog episodes, or particular years.
 - `python -m src.check_setup` must report 0 bad next-day targets and 0 bad
   lag-1 values. The feature table is complete daily; target/lag missingness
   comes from missing PM2.5 values, not row-shift gaps.
+- Run `python -m unittest discover -s tests -t .` after changing
+  `src/evaluate.py`. The tests use synthetic arrays and do not need the data
+  file.
 - `09_build_features.py` has no future or whole-dataset fill for PM2.5. Its only
   fill is `fillna(0)` for calendar flags after merging the calendar table. The
   `*_scaled` columns use all-row statistics and are explicitly excluded from

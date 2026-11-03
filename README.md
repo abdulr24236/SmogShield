@@ -82,6 +82,12 @@ python -m src.check_setup
 
 It prints the chronological split, feature count and per-split class support. The modelling rules are in [`docs/modeling_contract.md`](docs/modeling_contract.md); `src/data.py` and `src/evaluate.py` are the only shared data and metric implementations.
 
+Run the metric tests after changing `src/evaluate.py`:
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
 ## Repository Structure
 
 ```text
@@ -94,6 +100,7 @@ SmogShield/
 ├── data_scripts/        Phase 2 code (01-09)
 ├── docs/                modelling contract for Deliverable 2
 ├── src/                 shared data loading, metrics and setup checks
+├── tests/               unit tests for the shared metric helpers
 ├── outputs/
 │   ├── eda_charts/      EDA figures used in the report
 │   ├── model_charts/    Deliverable 2 figures (generated)

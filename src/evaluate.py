@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import warnings
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -53,6 +54,7 @@ def classification_metrics(
     """
     y_true = np.asarray(y_true)
     y_pred = np.asarray(y_pred)
+    labels_given = labels is not None
 
     if labels is None:
         labels = sorted(set(y_true.tolist()) | set(y_pred.tolist()))
@@ -72,15 +74,42 @@ def classification_metrics(
     )
 
     auc = None
+    auc_note = None
     if y_score is not None:
-        scores = np.asarray(y_score)
+        if not labels_given:
+            raise ValueError("Pass labels when y_score is provided.")
+
+        scores = np.asarray(y_score, dtype=float)
+        if not np.isfinite(scores).all():
+            raise ValueError("y_score contains non-finite values.")
+        if scores.ndim == 1:
+            if len(labels) != 2:
+                raise ValueError(
+                    "1-D y_score is only valid for binary classification."
+                )
+        elif scores.ndim == 2:
+            if scores.shape[1] != len(labels):
+                raise ValueError(
+                    f"y_score has {scores.shape[1]} columns, "
+                    f"expected {len(labels)}."
+                )
+            row_sums = scores.sum(axis=1)
+            if np.any(row_sums <= 0) or not np.allclose(
+                row_sums, 1.0, atol=1e-6
+            ):
+                raise ValueError(
+                    "y_score rows must sum to 1; pass probabilities, not logits."
+                )
+        else:
+            raise ValueError("y_score must be 1-D or 2-D.")
+
         try:
             if scores.ndim == 1:
-                auc = float(roc_auc_score(y_true, scores))
+                auc_value = float(roc_auc_score(y_true, scores))
             elif scores.shape[1] == 2:
-                auc = float(roc_auc_score(y_true, scores[:, 1]))
+                auc_value = float(roc_auc_score(y_true, scores[:, 1]))
             else:
-                auc = float(
+                auc_value = float(
                     roc_auc_score(
                         y_true,
                         scores,
@@ -89,12 +118,24 @@ def classification_metrics(
                         labels=labels,
                     )
                 )
-        except ValueError:
+            if not math.isfinite(auc_value):
+                raise ValueError(
+                    "AUC-ROC is undefined for this evaluation set "
+                    "(a class may be absent)."
+                )
+            auc = auc_value
+        except ValueError as exc:
             # AUC is undefined if a class is absent from y_true, for example.
-            auc = None
+            auc_note = str(exc)
+            warnings.warn(
+                f"AUC-ROC not computed: {exc}",
+                UserWarning,
+                stacklevel=2,
+            )
 
     return {
         "n_samples": int(len(y_true)),
+        "class_names": class_names,
         "accuracy": float(accuracy_score(y_true, y_pred)),
         "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)),
         "precision_macro": float(
@@ -134,6 +175,7 @@ def classification_metrics(
             )
         ),
         "roc_auc_ovr_macro": auc,
+        "roc_auc_note": auc_note,
         "confusion_matrix": confusion_matrix(
             y_true, y_pred, labels=labels
         ).tolist(),
@@ -192,6 +234,36 @@ def persistence_class_predictions(
     return np.asarray(predictions, dtype=int)
 
 
+def align_proba(
+    proba: np.ndarray | Sequence[Sequence[float]],
+    model_classes: Sequence[int],
+    n_classes: int,
+) -> np.ndarray:
+    """Place ``predict_proba`` columns into the fixed class-code order.
+
+    ``model_classes`` is normally ``model.classes_``. Columns for classes the
+    model never saw remain zero. Pass the aligned matrix to
+    ``classification_metrics`` so columns and labels cannot silently drift.
+    """
+    values = np.asarray(proba, dtype=float)
+    classes = np.asarray(model_classes, dtype=int)
+    if values.ndim != 2:
+        raise ValueError("proba must be a 2-D array.")
+    if values.shape[1] != len(classes):
+        raise ValueError(
+            f"proba has {values.shape[1]} columns but model_classes has "
+            f"{len(classes)} entries."
+        )
+    if len(set(classes.tolist())) != len(classes):
+        raise ValueError("model_classes contains duplicates.")
+    if len(classes) and (classes.min() < 0 or classes.max() >= n_classes):
+        raise ValueError("model_classes contains a code outside 0..n_classes-1.")
+
+    aligned = np.zeros((len(values), int(n_classes)), dtype=float)
+    aligned[:, classes] = values
+    return aligned
+
+
 def persistence_regression_predictions(
     current_pm25: Sequence[float],
     fallback: float | None = None,
@@ -211,22 +283,52 @@ def persistence_regression_predictions(
 def regression_metrics(
     y_true: np.ndarray | list[float],
     y_pred: np.ndarray | list[float],
+    allow_missing: bool = False,
+    persistence_rmse: float | None = None,
 ) -> dict[str, Any]:
-    """Return RMSE, MAE and R-squared for a regression model."""
+    """Return RMSE, MAE and R-squared for a regression model.
+
+    Non-finite targets always raise. Non-finite predictions raise unless
+    ``allow_missing=True``; only the persistence baseline should use that,
+    because a missing current-day PM2.5 cannot produce a persistence forecast.
+    When rows are dropped, report ``n_dropped`` and score every method on the
+    same finite row set.
+
+    ``persistence_rmse`` is optional. If supplied, the result includes
+    ``rmse_skill_vs_persistence = 1 - rmse_model / rmse_persistence``.
+    """
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
-    mask = np.isfinite(y_true) & np.isfinite(y_pred)
-    if not mask.any():
-        raise ValueError("No finite prediction/target pairs to evaluate.")
+    if y_true.shape != y_pred.shape:
+        raise ValueError("y_true and y_pred must have the same shape.")
+    if not np.isfinite(y_true).all():
+        raise ValueError("y_true contains non-finite values.")
 
-    y_true = y_true[mask]
-    y_pred = y_pred[mask]
-    return {
-        "n_samples": int(mask.sum()),
-        "rmse": float(math.sqrt(mean_squared_error(y_true, y_pred))),
-        "mae": float(mean_absolute_error(y_true, y_pred)),
-        "r2": float(r2_score(y_true, y_pred)),
+    finite = np.isfinite(y_pred)
+    if not finite.all() and not allow_missing:
+        raise ValueError(
+            f"{int((~finite).sum())} non-finite predictions; pass "
+            "allow_missing=True only for a persistence baseline."
+        )
+    if not finite.any():
+        raise ValueError("No finite predictions to evaluate.")
+
+    yt = y_true[finite]
+    yp = y_pred[finite]
+    result = {
+        "n_samples": int(finite.sum()),
+        "n_dropped": int((~finite).sum()),
+        "rmse": float(math.sqrt(mean_squared_error(yt, yp))),
+        "mae": float(mean_absolute_error(yt, yp)),
+        "r2": float(r2_score(yt, yp)),
     }
+    if persistence_rmse is not None:
+        if not math.isfinite(persistence_rmse) or persistence_rmse <= 0:
+            raise ValueError("persistence_rmse must be finite and positive.")
+        result["rmse_skill_vs_persistence"] = float(
+            1.0 - result["rmse"] / persistence_rmse
+        )
+    return result
 
 
 def _to_jsonable(value: Any) -> Any:
@@ -245,7 +347,7 @@ def _to_jsonable(value: Any) -> Any:
         value = float(value)
     if isinstance(value, bool):
         return value
-    if isinstance(value, float) and math.isnan(value):
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
         return None
     if isinstance(value, Path):
         return str(value)
@@ -257,7 +359,7 @@ def save_metrics(metrics: dict[str, Any], path: str | Path) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
-        json.dump(_to_jsonable(metrics), handle, indent=2, sort_keys=True)
+        json.dump(_to_jsonable(metrics), handle, indent=2)
         handle.write("\n")
     return path
 
