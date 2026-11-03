@@ -24,6 +24,13 @@ data/archive_unused/
 *.tmp
 *.log
 
+# Model binaries (share large artifacts via a link in README instead)
+models/*.joblib
+models/*.pkl
+models/*.pt
+models/*.pth
+models/*.onnx
+
 # Operating system files
 .DS_Store
 Thumbs.db
