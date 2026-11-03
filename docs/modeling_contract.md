@@ -65,6 +65,23 @@ support, and discuss the instability of macro metrics for rare classes. A
 coarser grouping may be used only as a sensitivity analysis, not as the primary
 target.
 
+Current class support by split:
+
+| Category | Train | Validation | Test |
+|---|---:|---:|---:|
+| Good | 9 | 0 | 0 |
+| Moderate | 100 | 16 | 8 |
+| Unhealthy for Sensitive | 175 | 53 | 34 |
+| Unhealthy | 488 | 80 | 77 |
+| Very Unhealthy | 148 | 47 | 61 |
+| Hazardous (301-400) | 72 | 43 | 24 |
+| Hazardous (401-500) | 30 | 11 | 19 |
+| **Total** | **1,022** | **250** | **223** |
+
+`ModelData.summary()["class_counts"]` returns this table, and
+`class_support_warnings` names every class with zero support in a split. The
+generated table must be included in the report.
+
 ## 3. Split
 
 Chronological split with a purge gap:
@@ -92,6 +109,10 @@ Rules:
 - Use the validation split for tuning and model selection.
 - Touch the test split once, after the model and hyperparameters are frozen.
 - Report all three row counts and date ranges.
+- For tuning, use `data.X_train_raw` with
+  `data.make_model_pipeline(estimator)` and `TimeSeriesSplit`. Do not
+  cross-validate on `data.X_train`: its preprocessor has already seen the whole
+  training split, including each fold's held-out rows.
 
 ## 4. Features and leakage
 
@@ -104,6 +125,12 @@ The shared loader in `src/data.py`:
 - keeps current-day PM2.5, AQI, weather and calendar features;
 - one-hot encodes `aqi_category` and median-imputes numeric features;
 - applies `RobustScaler` to numeric features after fitting on train only.
+
+The loader has a hard guard that raises if any `target_*` or `*_scaled` column
+survives the config lists. Do not remove this guard to work around a config
+typo; fix the config instead. The class labels are also required in
+`configs/base.yaml`; they are never inferred from the data, because that would
+make the order alphabetical and include validation/test labels.
 
 No model may add a feature derived from `shift(-1)` or from the test period.
 Any new feature must be added to the shared loader or explicitly documented and

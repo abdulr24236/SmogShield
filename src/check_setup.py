@@ -33,6 +33,17 @@ def main() -> None:
         print(f"  test:     {split['test_range'][0]} -> {split['test_range'][1]}")
         if data.labels is not None:
             print(f"  classes:  {len(data.labels)}")
+            for split_name, counts in summary["class_counts"].items():
+                rendered = ", ".join(
+                    f"{label}={count}" for label, count in counts.items()
+                )
+                print(f"  {split_name:10s} {rendered}")
+            support_warnings = summary.get("class_support_warnings", {})
+            for split_name, missing in support_warnings.items():
+                print(
+                    f"  WARNING: {split_name} has no rows for "
+                    f"{', '.join(missing)}"
+                )
     print("\nShared setup OK.")
 
 

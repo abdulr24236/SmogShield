@@ -16,6 +16,7 @@ This module enforces two rules that must be identical for every model:
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -197,6 +198,20 @@ def feature_columns(
     if not columns:
         raise ValueError("No feature columns remain after applying the config.")
 
+    # Hard leakage guard: do not rely only on config lists. A typo in
+    # exclude_suffixes or target_columns must fail loudly instead of silently
+    # feeding a future target or an all-row-scaled column to the model.
+    leaky = [
+        column
+        for column in columns
+        if column.startswith("target_") or column.endswith("_scaled")
+    ]
+    if leaky:
+        raise ValueError(
+            f"Leaky columns in feature set: {leaky}. "
+            "Remove target_* and *_scaled columns from the model inputs."
+        )
+
     categorical = [
         column
         for column in data_cfg.get("categorical_features", [])
@@ -269,16 +284,18 @@ def make_preprocessor(
     )
 
 
-def classification_labels(
-    config: dict[str, Any], target: pd.Series
-) -> list[str]:
-    """Return the fixed class order used by all classifiers and reports."""
+def classification_labels(config: dict[str, Any]) -> list[str]:
+    """Return the required, fixed class order used by classifiers/reports."""
     configured = config["data"].get("classification_labels")
-    if configured:
-        labels = [str(label) for label in configured]
-    else:
-        labels = sorted(str(value) for value in target.dropna().unique())
+    if not configured:
+        raise ValueError(
+            "Set data.classification_labels in ordinal order in "
+            "configs/base.yaml; deriving labels from the data is not allowed."
+        )
 
+    labels = [str(label) for label in configured]
+    if len(labels) < 2:
+        raise ValueError("At least two classification labels are required.")
     if len(labels) != len(set(labels)):
         raise ValueError(f"Duplicate classification labels: {labels}")
     return labels
@@ -311,12 +328,24 @@ def decode_classification_target(
     return np.asarray([labels[int(code)] for code in codes], dtype=object)
 
 
+def class_counts(y: pd.Series, labels: list[str]) -> dict[str, int]:
+    """Count each configured class in a split, including zero-count classes."""
+    counts = y.value_counts().reindex(range(len(labels)), fill_value=0)
+    return {
+        label: int(counts.get(index, 0))
+        for index, label in enumerate(labels)
+    }
+
+
 @dataclass(frozen=True)
 class ModelData:
     """Prepared, leakage-safe model inputs for one task."""
 
     task: str
     target_name: str
+    X_train_raw: pd.DataFrame
+    X_validation_raw: pd.DataFrame
+    X_test_raw: pd.DataFrame
     X_train: pd.DataFrame
     y_train: pd.Series
     X_validation: pd.DataFrame
@@ -324,6 +353,8 @@ class ModelData:
     X_test: pd.DataFrame
     y_test: pd.Series
     preprocessor: ColumnTransformer
+    numeric_features: list[str]
+    categorical_features: list[str]
     feature_names: list[str]
     labels: list[str] | None
     split: ChronologicalSplit
@@ -336,11 +367,53 @@ class ModelData:
             "validation_rows": int(len(self.X_validation)),
             "test_rows": int(len(self.X_test)),
             "n_features": int(len(self.feature_names)),
+            "n_raw_features": int(
+                len(self.numeric_features) + len(self.categorical_features)
+            ),
             "split": self.split.summary(),
         }
         if self.labels is not None:
+            counts = {
+                "train": class_counts(self.y_train, self.labels),
+                "validation": class_counts(self.y_validation, self.labels),
+                "test": class_counts(self.y_test, self.labels),
+            }
             result["class_labels"] = self.labels
+            result["class_counts"] = counts
+            missing = {
+                split_name: [
+                    label for label, count in split_counts.items() if count == 0
+                ]
+                for split_name, split_counts in counts.items()
+            }
+            missing = {
+                split_name: labels_missing
+                for split_name, labels_missing in missing.items()
+                if labels_missing
+            }
+            if missing:
+                result["class_support_warnings"] = missing
         return result
+
+    def make_model_pipeline(self, estimator: Any) -> Pipeline:
+        """Return an unfitted preprocessor + estimator pipeline for tuning.
+
+        Use this with the raw frames (``X_train_raw``) and a time-series
+        cross-validator. Do not cross-validate on ``X_train``: that matrix was
+        already transformed with a preprocessor fitted on the whole training
+        split, so each fold would see held-out scaling statistics.
+        """
+        return Pipeline(
+            steps=[
+                (
+                    "preprocessor",
+                    make_preprocessor(
+                        self.numeric_features, self.categorical_features
+                    ),
+                ),
+                ("model", estimator),
+            ]
+        )
 
 
 def prepare_model_data(
@@ -409,12 +482,31 @@ def prepare_model_data(
 
     labels: list[str] | None = None
     if task == "classification":
-        labels = classification_labels(config, df[target_name])
+        labels = classification_labels(config)
         y_train = encode_classification_target(split.train[target_name], labels)
         y_validation = encode_classification_target(
             split.validation[target_name], labels
         )
         y_test = encode_classification_target(split.test[target_name], labels)
+
+        for split_name, y_split in (
+            ("train", y_train),
+            ("validation", y_validation),
+            ("test", y_test),
+        ):
+            missing = [
+                label
+                for index, label in enumerate(labels)
+                if int((y_split == index).sum()) == 0
+            ]
+            if missing:
+                warnings.warn(
+                    f"{split_name} split has no rows for: {', '.join(missing)}. "
+                    "Per-class metrics and one-vs-rest AUC for these classes "
+                    "are undefined.",
+                    UserWarning,
+                    stacklevel=2,
+                )
     else:
         y_train = split.train[target_name].astype(float)
         y_validation = split.validation[target_name].astype(float)
@@ -423,6 +515,9 @@ def prepare_model_data(
     return ModelData(
         task=task,
         target_name=target_name,
+        X_train_raw=X_train_raw,
+        X_validation_raw=X_validation_raw,
+        X_test_raw=X_test_raw,
         X_train=X_train,
         y_train=y_train,
         X_validation=X_validation,
@@ -430,6 +525,8 @@ def prepare_model_data(
         X_test=X_test,
         y_test=y_test,
         preprocessor=preprocessor,
+        numeric_features=numeric,
+        categorical_features=categorical,
         feature_names=feature_names,
         labels=labels,
         split=split,

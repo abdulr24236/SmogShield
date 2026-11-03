@@ -72,6 +72,16 @@ python data_scripts/09_build_features.py       # feature table + 2 EDA charts
 
 Cleaning rules: raw files are never edited; the target is never filled; extreme values are flagged, not deleted; a day is usable only with at least 18 valid hours.
 
+## Modelling setup
+
+After restoring `data/processed/features_daily.csv`, run the shared contract check from the repository root:
+
+```bash
+python -m src.check_setup
+```
+
+It prints the chronological split, feature count and per-split class support. The modelling rules are in [`docs/modeling_contract.md`](docs/modeling_contract.md); `src/data.py` and `src/evaluate.py` are the only shared data and metric implementations.
+
 ## Repository Structure
 
 ```text
@@ -80,9 +90,14 @@ SmogShield/
 ├── DATA_SOURCES.md
 ├── requirements.txt
 ├── .gitignore
+├── configs/             shared split, target and feature configuration
 ├── data_scripts/        Phase 2 code (01-09)
+├── docs/                modelling contract for Deliverable 2
+├── src/                 shared data loading, metrics and setup checks
 ├── outputs/
-│   └── eda_charts/      EDA figures used in the report
+│   ├── eda_charts/      EDA figures used in the report
+│   ├── model_charts/    Deliverable 2 figures (generated)
+│   └── model_results/   Deliverable 2 metrics (generated)
 └── reports/             LaTeX sources and the data collection log
 ```
 
