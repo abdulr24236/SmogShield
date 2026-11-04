@@ -24,6 +24,21 @@ data/archive_unused/
 *.tmp
 *.log
 
+# Model artifacts (share large binaries via a link in README instead)
+models/*
+!models/README.md
+models/*.joblib
+models/*.pkl
+models/*.pt
+models/*.pth
+models/*.onnx
+
+# Generated model outputs; keep the tracked README placeholders
+outputs/model_results/*
+!outputs/model_results/README.md
+outputs/model_charts/*
+!outputs/model_charts/README.md
+
 # Operating system files
 .DS_Store
 Thumbs.db
