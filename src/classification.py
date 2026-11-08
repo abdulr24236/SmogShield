@@ -26,7 +26,6 @@ Design rules (from docs/modeling_contract.md):
 
 from __future__ import annotations
 
-import json
 import time
 import warnings
 from pathlib import Path
@@ -70,7 +69,7 @@ CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 # ---------------------------------------------------------------------------
 # Seed (from config; kept as module-level constant for reproducibility notes)
 # ---------------------------------------------------------------------------
-_SEED = 42
+_SEED = int(load_config()["seed"])
 
 
 # ===========================================================================
@@ -309,7 +308,8 @@ def _tune_model(
 
     print(f"\n[Tuning] {name} — {n_iter} random iterations, {cv.n_splits} folds …")
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", (UserWarning, FutureWarning))
+        warnings.simplefilter("ignore", UserWarning)
+        warnings.simplefilter("ignore", FutureWarning)
         search.fit(data.X_train_raw, data.y_train)
 
     best_params = {
@@ -527,7 +527,8 @@ def evaluate_final(
         from sklearn.base import clone as sk_clone
         model_pipe = sk_clone(pipeline)
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", (UserWarning, FutureWarning))
+            warnings.simplefilter("ignore", UserWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             model_pipe.fit(data.X_train_raw, data.y_train)
 
     results: dict[str, dict[str, Any]] = {}
@@ -592,6 +593,7 @@ def generate_predictions_csv(
     date, split, model, y_true_code, y_pred_code,
     proba_0, proba_1, proba_2, proba_3, proba_4, proba_5, scorable
     """
+    assert len(data.labels) == 6, f"Expected 6 classes, got {len(data.labels)}"
     dfs = []
     for split_name in ("validation", "test"):
         if split_name == "validation":
@@ -741,7 +743,8 @@ def plot_hgb_val_curve(
         pipe_i = sk_clone(pipeline)
         pipe_i.set_params(model=hgb_i)
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+            warnings.simplefilter("ignore", UserWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             pipe_i.fit(data.X_train_raw, data.y_train)
         y_pred = pipe_i.predict(data.X_validation_raw)
         y_t, y_p = _scorable_subset(mask_val, data.y_validation, y_pred)
@@ -793,7 +796,8 @@ def plot_lr_C_curve(
         pipe_i = sk_clone(pipeline)
         pipe_i.set_params(model=lr_i)
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+            warnings.simplefilter("ignore", UserWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             pipe_i.fit(data.X_train_raw, data.y_train)
         y_pred = pipe_i.predict(data.X_validation_raw)
         y_t, y_p = _scorable_subset(mask_val, data.y_validation, y_pred)
@@ -950,6 +954,7 @@ def main() -> None:
     mlp_pipeline: Pipeline | None = None
     mlp_tuning: dict[str, Any] | None = None
     mlp_val_f1 = 0.0
+    mlp_failure: str | None = None
 
     try:
         mlp_pipeline_cand, mlp_tuning_cand = build_and_tune_mlp(data, cv)
@@ -969,7 +974,15 @@ def main() -> None:
             mlp_tuning["tuning_status"] = "excluded"
             mlp_tuning["selected"] = False
     except Exception as exc:
+        mlp_failure = str(exc)
         print(f"  [Warning] MLP tuning failed: {exc}. Skipping MLP.")
+        tuning_records.append({
+            "model": "MLP",
+            "tuning_status": "failed",
+            "selected": False,
+            "validation_f1_macro": None,
+            "error": str(exc),
+        })
 
     # ------------------------------------------------------------------
     # 5. Model Selection (based on validation macro F1)
@@ -1011,6 +1024,11 @@ def main() -> None:
         "selected_model_val_f1_macro": selected_val_f1,
         "persistence_fallback_class": fallback_name,
         "persistence_fallback_code": fallback_code,
+        "cv_validation_f1_caveat": (
+            "best_cv_f1_macro is computed per fold over the classes present in that fold; "
+            "validation_f1_macro uses all six configured labels. "
+            "The two values are not directly comparable."
+        ),
         "baselines": baseline_metrics,
         "models": {},
         "hyperparameters": tuning_records,
@@ -1042,6 +1060,8 @@ def main() -> None:
     if mlp_pipeline is not None:
         mlp_results, mlp_preds = evaluate_final("MLP", mlp_pipeline, data)
         all_metrics["models"]["mlp"] = mlp_results
+    elif mlp_failure is not None:
+        all_metrics["models"]["mlp_note"] = "MLP tuning failed"
     else:
         all_metrics["models"]["mlp_note"] = (
             f"MLP excluded: val macro F1 ({mlp_val_f1:.4f}) "
@@ -1058,6 +1078,12 @@ def main() -> None:
     else:
         selected_preds = mlp_preds
         selected_results = mlp_results
+
+    all_metrics["selected_model_metrics"] = {
+        "model": selected_name,
+        "validation": selected_results["validation"],
+        "test": selected_results["test"],
+    }
 
     # ------------------------------------------------------------------
     # 7. Generate Per-Row Predictions CSV (Deliverable for Ayub's bias analysis)
@@ -1093,6 +1119,8 @@ def main() -> None:
     print(f"  {'HistGradientBoosting':30s} | {_get_f1(hgb_results, 'validation'):13.4f} | {_get_f1(hgb_results, 'test'):13.4f}")
     if mlp_results is not None:
         print(f"  {'MLP':30s} | {_get_f1(mlp_results, 'validation'):13.4f} | {_get_f1(mlp_results, 'test'):13.4f}")
+    elif mlp_failure is not None:
+        print(f"  {'MLP (failed)':30s} | {'failed':>13s} | {'N/A (failed)':>13s}")
     else:
         print(f"  {'MLP (excluded)':30s} | {mlp_val_f1:13.4f} | {'N/A (excluded)':>13s}")
     print(f"  {'Majority baseline':30s} | {baseline_metrics['majority_validation']['f1_macro']:13.4f} | {baseline_metrics['majority_test']['f1_macro']:13.4f}")
