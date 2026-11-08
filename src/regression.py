@@ -67,7 +67,7 @@ def tune_models(data, config):
             cv=tscv,
             scoring=scoring_func,
             n_jobs=-1,
-            error_score="raise",  # Fix 14
+            error_score="raise",
         )
 
         grid_search.fit(data.X_train_raw, data.y_train)
@@ -89,19 +89,29 @@ def tune_models(data, config):
     return best_models, hyperparameters
 
 
-def generate_learning_curve(data, config, charts_dir):
-    """Fix 15: Learning curve for HGB max_iter."""
+def generate_learning_curve(data, config, charts_dir, hyperparameters):
+    """Learning curve for HGB max_iter using the selected configuration."""
     print("Generating HGB learning curve...")
     seed = config.get("seed", 42)
     max_iters = [10, 50, 100, 200, 300, 500]
     val_rmses = []
+
+    # Use the tuned HGB hyperparameters
+    hgb_params = hyperparameters.get("hist_gb", {}).get("selected_params", {})
+    lr = hgb_params.get("learning_rate", 0.05)
+    md = hgb_params.get("max_depth", 3)
 
     mask = data.scorable_rows["validation"].to_numpy()
     y_true = data.y_validation[mask].to_numpy()
 
     for it in max_iters:
         model = data.make_model_pipeline(
-            HistGradientBoostingRegressor(max_iter=it, random_state=seed)
+            HistGradientBoostingRegressor(
+                max_iter=it,
+                learning_rate=lr,
+                max_depth=md,
+                random_state=seed,
+            )
         )
         model.fit(data.X_train_raw, data.y_train)
         preds = model.predict(data.X_validation_raw)[mask]
@@ -111,7 +121,9 @@ def generate_learning_curve(data, config, charts_dir):
     plt.plot(max_iters, val_rmses, marker="o")
     plt.xlabel("HGB max_iter")
     plt.ylabel("Validation RMSE")
-    plt.title("HGB Learning Curve (Validation RMSE vs max_iter)")
+    plt.title(
+        f"HGB Learning Curve (lr={lr}, max_depth={md}) - Validation RMSE vs max_iter"
+    )
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(charts_dir / "regression_hgb_learning_curve.png")
@@ -123,14 +135,12 @@ def evaluate_and_plot(data, best_models, config):
     charts_dir = resolve_path(config["paths"]["charts"])
     os.makedirs(charts_dir, exist_ok=True)
 
-    # Fix 6: Fit each model once
     print("Fitting final models...")
     fitted_models = {}
     for name, model in best_models.items():
         model.fit(data.X_train_raw, data.y_train)
         fitted_models[name] = model
 
-    # Cache predictions per (model, split)
     preds_cache = {}
 
     for split in ["validation", "test"]:
@@ -150,7 +160,6 @@ def evaluate_and_plot(data, best_models, config):
         y_true = y_true_full[mask_np].to_numpy()
         n_dropped = int(len(y_true_full) - len(y_true))
 
-        # Persistence baseline
         pers_preds_full = evaluate.persistence_regression_predictions(
             X_raw["pm25"]
         )
@@ -165,7 +174,6 @@ def evaluate_and_plot(data, best_models, config):
             dates, y_true_full, pers_preds_full, mask_np
         )
 
-        # Trained models
         for name, model in fitted_models.items():
             preds_full = model.predict(X_raw)
             metrics = evaluate.regression_metrics(
@@ -180,7 +188,6 @@ def evaluate_and_plot(data, best_models, config):
                 dates, y_true_full, preds_full, mask_np
             )
 
-    # Fix 2: Select model by validation RMSE
     val_rmse_dict = {
         m: results[f"{m}_validation"]["rmse"] for m in best_models.keys()
     }
@@ -192,7 +199,11 @@ def evaluate_and_plot(data, best_models, config):
         "test": results["persistence_test"]["n_dropped"],
     }
 
-    # Fix 1: Save predictions for ONLY the selected model
+    # Save scorable-row fields from data.summary()
+    summary = data.summary()
+    results["scorable_rows"] = summary["scorable_rows"]
+    results["scorable_rows_dropped"] = summary["scorable_rows_dropped"]
+
     pred_rows = []
     for split in ["validation", "test"]:
         dates, y_true_full, preds_full, mask_np = preds_cache[
@@ -225,14 +236,12 @@ def evaluate_and_plot(data, best_models, config):
     )
     print(f"Saved {len(df_preds)} predictions to {preds_path}")
 
-    # Save metrics
     metrics_path = (
         resolve_path(config["paths"]["results"]) / "regression_metrics.json"
     )
     evaluate.save_metrics(results, metrics_path)
     print(f"Saved metrics to {metrics_path}")
 
-    # --- CHARTS ---
     print("Generating charts...")
     test_mask = data.scorable_rows["test"].to_numpy()
     y_test_true = data.y_test[test_mask].to_numpy()
@@ -240,14 +249,15 @@ def evaluate_and_plot(data, best_models, config):
         test_mask, config["data"]["date_column"]
     ]
 
-    for name in [selected_model, "ridge", "persistence"]:
+    # Loop over unique model names to avoid duplicate Ridge charts
+    chart_models = list(dict.fromkeys([selected_model, "ridge", "persistence"]))
+    for name in chart_models:
         if name not in fitted_models and name != "persistence":
             continue
         dates, y_true_full, preds_full, mask_np = preds_cache[(name, "test")]
         preds = preds_full[test_mask]
         residuals = y_test_true - preds
 
-        # Chart 1: Pred vs Actual
         plt.figure(figsize=(8, 6))
         plt.scatter(y_test_true, preds, alpha=0.5)
         lims = [
@@ -263,7 +273,6 @@ def evaluate_and_plot(data, best_models, config):
         plt.savefig(charts_dir / f"regression_{name}_pred_vs_actual.png")
         plt.close()
 
-        # Chart 2: Residuals vs Pred
         plt.figure(figsize=(8, 6))
         plt.scatter(preds, residuals, alpha=0.5)
         plt.axhline(0, color="r", linestyle="--")
@@ -274,7 +283,6 @@ def evaluate_and_plot(data, best_models, config):
         plt.savefig(charts_dir / f"regression_{name}_residuals_vs_pred.png")
         plt.close()
 
-        # Chart 3: Residuals over Time
         plt.figure(figsize=(10, 4))
         plt.plot(dates_test, residuals, marker=".", linestyle="-", alpha=0.7)
         plt.axhline(0, color="r", linestyle="--")
@@ -288,7 +296,6 @@ def evaluate_and_plot(data, best_models, config):
         )
         plt.close()
 
-    # Fix 4: Error by Severity (proper concentration bands)
     _, _, sel_preds_full, _ = preds_cache[(selected_model, "test")]
     df_sev = pd.DataFrame(
         {
@@ -305,6 +312,8 @@ def evaluate_and_plot(data, best_models, config):
     )
     sev_counts = df_sev["severity"].value_counts().reindex(labels).fillna(0).astype(int)
     sev_errors = df_sev.groupby("severity", observed=False)["error"].mean().dropna()
+    # Reindex counts to match the bands that actually appear
+    sev_counts = sev_counts.reindex(sev_errors.index)
 
     plt.figure(figsize=(10, 5))
     bars = plt.bar(
@@ -326,7 +335,6 @@ def evaluate_and_plot(data, best_models, config):
     plt.savefig(charts_dir / f"regression_{selected_model}_error_by_severity.png")
     plt.close()
 
-    # Chart 5: Val/Test comparison
     plt.figure(figsize=(10, 5))
     x_labels = list(best_models.keys()) + ["persistence"]
     val_rmse = [results[f"{m}_validation"]["rmse"] for m in x_labels]
@@ -359,13 +367,15 @@ def main():
     data = prepare_model_data(config, "regression")
 
     best_models, hyperparameters = tune_models(data, config)
-    generate_learning_curve(
-        data, config, resolve_path(config["paths"]["charts"])
-    )
+
+    # Create charts directory before learning curve
+    charts_dir = resolve_path(config["paths"]["charts"])
+    os.makedirs(charts_dir, exist_ok=True)
+
+    generate_learning_curve(data, config, charts_dir, hyperparameters)
 
     results = evaluate_and_plot(data, best_models, config)
 
-    # Fix 3: Add held-out val RMSE to hyperparameters
     for name in best_models:
         hyperparameters[name]["held_out_val_rmse"] = results[
             f"{name}_validation"

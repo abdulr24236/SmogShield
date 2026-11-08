@@ -11,10 +11,10 @@ Outputs:
     - outputs/model_results/bias_subgroup_metrics.json
     - outputs/model_results/bias_subgroup_metrics.csv
     - outputs/model_results/bias_interpretation.txt
+    - outputs/model_results/bias_class_mix.csv
     - outputs/model_charts/bias_*.png
 """
 
-import os
 import sys
 import json
 import numpy as np
@@ -22,8 +22,20 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from sklearn.metrics import f1_score
 
 from src.data import load_config, prepare_model_data, resolve_path
+
+
+EXPECTED_DIMENSIONS = [
+    "AQI Category",
+    "Season",
+    "Year",
+    "Weekday_Weekend",
+    "Severity_Band",
+    "Islamic_Event",
+    "Public_Holiday",
+]
 
 
 def load_predictions(config):
@@ -43,11 +55,9 @@ def load_predictions(config):
     reg_df = pd.read_csv(reg_path)
     class_df = pd.read_csv(class_path)
 
-    # Only keep scorable rows
     reg_df = reg_df[reg_df["scorable"] == True].copy()
     class_df = class_df[class_df["scorable"] == True].copy()
 
-    # Normalize date to string for reliable join
     reg_df["date"] = pd.to_datetime(reg_df["date"]).dt.strftime("%Y-%m-%d")
     class_df["date"] = pd.to_datetime(class_df["date"]).dt.strftime("%Y-%m-%d")
 
@@ -59,7 +69,13 @@ def load_predictions(config):
         suffixes=("_reg", "_class"), how="inner",
     )
     print(f"Rows surviving the join: {len(merged)}")
-    return merged
+
+    return {
+        "merged": merged,
+        "reg_rows": int(len(reg_df)),
+        "class_rows": int(len(class_df)),
+        "join_rows": int(len(merged)),
+    }
 
 
 def get_subgroup_metrics(y_true, y_pred, y_true_cls, y_pred_cls, class_labels):
@@ -71,18 +87,13 @@ def get_subgroup_metrics(y_true, y_pred, y_true_cls, y_pred_cls, class_labels):
     res = {"n_samples": n}
     res["reg_rmse"] = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
     res["reg_mae"] = float(np.mean(np.abs(y_true - y_pred)))
-    # Sign convention: Actual - Predicted. Positive = under-prediction
     res["mean_signed_error"] = float(np.mean(y_true - y_pred))
-
-    # Classification metrics
     res["cls_accuracy"] = float(np.mean(y_true_cls == y_pred_cls))
 
-    # Macro F1 over classes present in this subgroup
     present_classes = sorted(
         set(y_true_cls.tolist()) | set(y_pred_cls.tolist())
     )
     if len(present_classes) > 0:
-        from sklearn.metrics import f1_score
         res["cls_macro_f1"] = float(
             f1_score(
                 y_true_cls, y_pred_cls, labels=present_classes,
@@ -92,7 +103,6 @@ def get_subgroup_metrics(y_true, y_pred, y_true_cls, y_pred_cls, class_labels):
     else:
         res["cls_macro_f1"] = None
 
-    # Per-class error counts
     per_class_errors = {}
     for i, label in enumerate(class_labels):
         mask = y_true_cls == i
@@ -107,13 +117,12 @@ def get_subgroup_metrics(y_true, y_pred, y_true_cls, y_pred_cls, class_labels):
 
 def main():
     config = load_config()
-    # Fix 8: Only use prepare_model_data to get data.split
     data = prepare_model_data(config, "regression")
 
     print("Loading predictions...")
-    merged = load_predictions(config)
+    pred_info = load_predictions(config)
+    merged = pred_info["merged"]
 
-    # Fix 8: Pull calendar features from data.split
     val_df = data.split.validation
     test_df = data.split.test
     all_dates = pd.concat([val_df, test_df], ignore_index=True)
@@ -121,7 +130,6 @@ def main():
         all_dates[config["data"]["date_column"]]
     ).dt.strftime("%Y-%m-%d")
 
-    # Keep only the columns we need to avoid collision
     calendar_cols = ["date", "year", "month"]
     for col in ["is_ramadan", "is_eid", "is_public_holiday", "is_weekend"]:
         if col in all_dates.columns:
@@ -132,17 +140,14 @@ def main():
         on="date", how="left",
     )
 
-    # Fix 10: Severity bands using PM2.5 concentration ranges
     bins = [0, 50, 100, 150, 200, 300, 500, np.inf]
     labels = ["0-50", "51-100", "101-150", "151-200", "201-300", "301-500", "500+"]
     merged["severity_band"] = pd.cut(
         merged["y_true"], bins=bins, labels=labels, include_lowest=True
     )
 
-    # Fix 8: Map integer codes to string labels
     labels_list = config["data"]["classification_labels"]
 
-    # Build subgroups
     merged["aqi_category"] = merged["y_true_code"].apply(
         lambda x: labels_list[int(x)] if pd.notna(x) else "Missing"
     )
@@ -155,29 +160,34 @@ def main():
     }
     merged["season"] = merged["month"].map(season_map)
 
+    # Weekday/Weekend — explicit numeric coercion, do not use fillna(0)
     if "is_weekend" in merged.columns:
-        merged["weekday_weekend"] = merged["is_weekend"].map(
-            {True: "Weekend", False: "Weekday", 1: "Weekend", 0: "Weekday"}
-        )
+        flag = pd.to_numeric(merged["is_weekend"], errors="coerce")
+        merged["weekday_weekend"] = flag.map({1: "Weekend", 0: "Weekday"})
     else:
-        merged["weekday_weekend"] = pd.to_datetime(merged["date"]).dt.dayofweek.map(
-            lambda x: "Weekend" if x >= 5 else "Weekday"
-        )
+        merged["weekday_weekend"] = pd.to_datetime(
+            merged["date"]
+        ).dt.dayofweek.map(lambda x: "Weekend" if x >= 5 else "Weekday")
 
+    # Islamic events — explicit coercion, keep genuine missing as Unknown
     if "is_ramadan" in merged.columns and "is_eid" in merged.columns:
-        merged["islamic_event"] = np.where(
-            merged["is_ramadan"].fillna(0).astype(int) == 1, "Ramadan",
-            np.where(
-                merged["is_eid"].fillna(0).astype(int) == 1, "Eid", "Normal"
-            ),
+        ramadan = pd.to_numeric(merged["is_ramadan"], errors="coerce")
+        eid = pd.to_numeric(merged["is_eid"], errors="coerce")
+        both_missing = ramadan.isna() | eid.isna()
+        merged["islamic_event"] = np.select(
+            [ramadan == 1, eid == 1, both_missing],
+            ["Ramadan", "Eid", "Unknown"],
+            default="Normal",
         )
     else:
         merged["islamic_event"] = "Unknown"
 
+    # Public holiday — explicit coercion
     if "is_public_holiday" in merged.columns:
-        merged["holiday"] = merged["is_public_holiday"].map(
-            {True: "Holiday", False: "Normal", 1: "Holiday", 0: "Normal"}
-        ).fillna("Unknown")
+        holiday = pd.to_numeric(
+            merged["is_public_holiday"], errors="coerce"
+        )
+        merged["holiday"] = holiday.map({1: "Holiday", 0: "Normal"})
     else:
         merged["holiday"] = "Unknown"
 
@@ -200,6 +210,34 @@ def main():
 
         print(f"\nAnalyzing {split} split ({len(split_df)} rows)...")
 
+        # Guard: every expected dimension must be present and non-degenerate
+        for dim_name in EXPECTED_DIMENSIONS:
+            if dim_name not in subgroups:
+                raise ValueError(
+                    f"Expected dimension {dim_name} not in subgroups map"
+                )
+            col = subgroups[dim_name]
+            if col not in split_df.columns:
+                raise ValueError(
+                    f"Dimension {dim_name} (column {col}) missing from split {split}"
+                )
+            missing_count = int(split_df[col].isna().sum())
+            print(f"  [{split}] {dim_name}: {missing_count} missing values")
+            unique_vals = split_df[col].dropna().unique()
+            if len(unique_vals) == 0:
+                raise ValueError(
+                    f"Dimension {dim_name} in split {split} has no non-null values"
+                )
+            if all(str(v) == "Unknown" for v in unique_vals):
+                raise ValueError(
+                    f"Dimension {dim_name} in split {split} has all Unknown values"
+                )
+            if len(unique_vals) == 1:
+                print(
+                    f"  WARNING: [{split}] {dim_name} has only one group: "
+                    f"{unique_vals[0]}"
+                )
+
         for dim_name, col in subgroups.items():
             for group in split_df[col].dropna().unique():
                 group_data = split_df[split_df[col] == group]
@@ -215,61 +253,156 @@ def main():
                 )
                 all_results.append(metrics)
 
-        # Fix 13: Chart per dimension per split (season example)
-        season_rows = [
-            r for r in all_results
-            if r["split"] == split and r["dimension"] == "Season"
-        ]
-        if season_rows:
-            seasons = [r["group"] for r in season_rows]
-            mse_vals = [r["mean_signed_error"] for r in season_rows]
-            plt.figure(figsize=(8, 5))
-            plt.bar(
-                seasons, mse_vals,
+    # Charts for all 7 dimensions per split
+    charts_dir = resolve_path(config["paths"]["charts"])
+    charts_dir.mkdir(parents=True, exist_ok=True)
+
+    for split in ["validation", "test"]:
+        for dim_name in EXPECTED_DIMENSIONS:
+            dim_rows = [
+                r for r in all_results
+                if r["split"] == split and r["dimension"] == dim_name
+            ]
+            if not dim_rows:
+                continue
+
+            groups = [r["group"] for r in dim_rows]
+            mse_vals = [r.get("mean_signed_error", 0) for r in dim_rows]
+            acc_vals = [r.get("cls_accuracy", 0) or 0 for r in dim_rows]
+            ns = [r["n_samples"] for r in dim_rows]
+
+            fig, axes = plt.subplots(1, 2, figsize=(15, 5))
+
+            bars = axes[0].bar(
+                groups, mse_vals,
                 color=["red" if v > 0 else "blue" for v in mse_vals],
             )
-            plt.axhline(0, color="black", linestyle="--")
-            plt.ylabel("Mean Signed Error (Actual - Predicted)")
-            plt.title(f"Over/Under-prediction by Season ({split})")
+            axes[0].axhline(0, color="black", linestyle="--")
+            axes[0].set_ylabel("Mean Signed Error (Actual - Predicted)")
+            axes[0].set_title(
+                f"{dim_name} Signed Error ({split})\n"
+                f"(positive = under-prediction)"
+            )
+            axes[0].tick_params(axis="x", rotation=45)
+            for i, bar in enumerate(bars):
+                label = f"n={ns[i]}"
+                if ns[i] < 30:
+                    label += " *"
+                y = bar.get_height()
+                axes[0].text(
+                    bar.get_x() + bar.get_width() / 2, y, label,
+                    ha="center", va="bottom" if y >= 0 else "top",
+                    fontsize=8,
+                )
+
+            bars2 = axes[1].bar(groups, acc_vals, color="seagreen")
+            axes[1].set_ylabel("Classification Accuracy")
+            axes[1].set_title(
+                f"{dim_name} Classification Accuracy ({split})"
+            )
+            axes[1].tick_params(axis="x", rotation=45)
+            axes[1].set_ylim(0, 1.05)
+            for i, bar in enumerate(bars2):
+                label = f"n={ns[i]}"
+                if ns[i] < 30:
+                    label += " *"
+                axes[1].text(
+                    bar.get_x() + bar.get_width() / 2, bar.get_height(),
+                    label, ha="center", va="bottom", fontsize=8,
+                )
+
             plt.tight_layout()
             plt.savefig(
-                resolve_path(config["paths"]["charts"])
-                / f"bias_season_error_{split}.png"
+                charts_dir / f"bias_{dim_name.replace(' ', '_')}_{split}.png"
             )
             plt.close()
 
-    # Save outputs
+    # Model names
+    def _first_non_null(df, col):
+        if col in df.columns:
+            vals = df[col].dropna()
+            if len(vals) > 0:
+                return str(vals.iloc[0])
+        return "unknown"
+
+    model_reg = _first_non_null(merged, "model_reg")
+    model_class = _first_non_null(merged, "model_class")
+
+    # Class-mix table (true next-day class counts by split and year)
+    class_mix = (
+        merged.groupby(["split", "year", "y_true_code"])
+        .size()
+        .reset_index(name="count")
+    )
+    class_mix["aqi_label"] = class_mix["y_true_code"].apply(
+        lambda x: labels_list[int(x)] if pd.notna(x) else "Missing"
+    )
+
     results_dir = resolve_path(config["paths"]["results"])
 
     df_results = pd.DataFrame(all_results)
-    # Flatten per_class_errors for CSV
     df_results["per_class_errors"] = df_results["per_class_errors"].apply(
         lambda d: json.dumps(d) if isinstance(d, dict) else d
     )
     df_results.to_csv(results_dir / "bias_subgroup_metrics.csv", index=False)
 
-    with open(results_dir / "bias_subgroup_metrics.json", "w") as f:
-        json.dump(all_results, f, indent=4, default=str)
+    class_mix.to_csv(results_dir / "bias_class_mix.csv", index=False)
 
-    # Fix 13: Interpretation text
-    interpretation = """Bias Analysis Interpretation
+    json_output = {
+        "model_reg": model_reg,
+        "model_class": model_class,
+        "join_counts": {
+            "regression_rows": pred_info["reg_rows"],
+            "classification_rows": pred_info["class_rows"],
+            "join_rows": pred_info["join_rows"],
+        },
+        "class_mix_note": (
+            "Computed from joined rows where scorable=True "
+            "(only scorable prediction rows)."
+        ),
+        "results": all_results,
+    }
+    with open(results_dir / "bias_subgroup_metrics.json", "w") as f:
+        json.dump(json_output, f, indent=4, default=str)
+
+    interpretation = f"""Bias Analysis Interpretation
 ================================
 - Single monitoring station. No demographic attributes are available.
 - This is an environmental and temporal bias check, not demographic.
 - Class mix shifts across periods. Do not make causal claims.
 - Grouped by: TRUE next-day AQI category (y_true_code), NOT today's aqi_category.
-  This answers "where does the model fail by true severity?"
+  The AQI Category group therefore also conditions on the outcome, like the
+  severity bands do.
 - Severity Bands: Grouping by actual PM2.5 conditions on the outcome.
   High bands will look under-predicted and low bands over-predicted by construction.
+- Severity bands are RAW PM2.5 CONCENTRATION RANGES (0-50, 51-100, ... ug/m3),
+  NOT AQI category breakpoints, so they will not line up exactly with the
+  AQI Category grouping above.
 - Sign convention: Mean Signed Error = Actual - Predicted. Positive = under-prediction.
 - Macro F1 averages over the classes PRESENT in that subgroup.
-- Small support warning: n < 30 flagged in the 'warning' column.
+- Small support warning: n < 30 flagged in the 'warning' column and marked '*' on charts.
 - Note: Good/Moderate and Hazardous (401-500) are noisy due to small support.
+
+Model analysed:
+- Regression model (model_reg): {model_reg}
+- Classification model (model_class): {model_class}
+
+Join counts:
+- Regression prediction rows: {pred_info["reg_rows"]}
+- Classification prediction rows: {pred_info["class_rows"]}
+- Rows surviving the join: {pred_info["join_rows"]}
+
+Class mix table:
+- Saved to bias_class_mix.csv (true next-day class counts by split and year).
+- Computed from the joined prediction rows where scorable=True (only scorable
+  rows are used; non-scorable rows are excluded before the join).
 """
     with open(results_dir / "bias_interpretation.txt", "w") as f:
         f.write(interpretation)
 
     print(f"\nSaved bias analysis to {results_dir}")
+    print(f"  model_reg: {model_reg}")
+    print(f"  model_class: {model_class}")
 
 
 if __name__ == "__main__":
