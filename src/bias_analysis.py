@@ -90,9 +90,7 @@ def get_subgroup_metrics(y_true, y_pred, y_true_cls, y_pred_cls, class_labels):
     res["mean_signed_error"] = float(np.mean(y_true - y_pred))
     res["cls_accuracy"] = float(np.mean(y_true_cls == y_pred_cls))
 
-    present_classes = sorted(
-        set(y_true_cls.tolist()) | set(y_pred_cls.tolist())
-    )
+    present_classes = sorted(set(y_true_cls.tolist()))
     if len(present_classes) > 0:
         res["cls_macro_f1"] = float(
             f1_score(
@@ -202,14 +200,14 @@ def main():
     }
 
     all_results = []
-
+    missing_counts = {}
     for split in ["validation", "test"]:
         split_df = merged[merged["split"] == split]
         if len(split_df) == 0:
             continue
 
         print(f"\nAnalyzing {split} split ({len(split_df)} rows)...")
-
+        missing_counts[split] = {}
         # Guard: every expected dimension must be present and non-degenerate
         for dim_name in EXPECTED_DIMENSIONS:
             if dim_name not in subgroups:
@@ -223,6 +221,7 @@ def main():
                 )
             missing_count = int(split_df[col].isna().sum())
             print(f"  [{split}] {dim_name}: {missing_count} missing values")
+            missing_counts[split][dim_name] = missing_count
             unique_vals = split_df[col].dropna().unique()
             if len(unique_vals) == 0:
                 raise ValueError(
@@ -266,6 +265,15 @@ def main():
             if not dim_rows:
                 continue
 
+            if dim_name == "Severity_Band":
+                _sev_order = labels
+                dim_rows = sorted(
+                    dim_rows,
+                    key=lambda r: _sev_order.index(str(r["group"]))
+                    if str(r["group"]) in _sev_order else 999,
+                )
+            else:
+                dim_rows = sorted(dim_rows, key=lambda r: str(r["group"]))
             groups = [r["group"] for r in dim_rows]
             mse_vals = [r.get("mean_signed_error", 0) for r in dim_rows]
             acc_vals = [r.get("cls_accuracy", 0) or 0 for r in dim_rows]
@@ -294,6 +302,12 @@ def main():
                     ha="center", va="bottom" if y >= 0 else "top",
                     fontsize=8,
                 )
+            axes[0].text(
+                0.02, 0.98, "* = n < 30",
+                transform=axes[0].transAxes,
+                va="top", ha="left", fontsize=9,
+                bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
+            )
 
             bars2 = axes[1].bar(groups, acc_vals, color="seagreen")
             axes[1].set_ylabel("Classification Accuracy")
@@ -310,6 +324,12 @@ def main():
                     bar.get_x() + bar.get_width() / 2, bar.get_height(),
                     label, ha="center", va="bottom", fontsize=8,
                 )
+            axes[1].text(
+                0.02, 0.98, "* = n < 30",
+                transform=axes[1].transAxes,
+                va="top", ha="left", fontsize=9,
+                bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
+            )
 
             plt.tight_layout()
             plt.savefig(
@@ -334,6 +354,17 @@ def main():
         .size()
         .reset_index(name="count")
     )
+    _splits_present = sorted(merged["split"].unique())
+    _years_present = sorted(merged["year"].dropna().unique())
+    _full_index = pd.MultiIndex.from_product(
+        [_splits_present, _years_present, range(len(labels_list))],
+        names=["split", "year", "y_true_code"],
+    )
+    class_mix = (
+        class_mix.set_index(["split", "year", "y_true_code"])
+        .reindex(_full_index, fill_value=0)
+        .reset_index()
+    )
     class_mix["aqi_label"] = class_mix["y_true_code"].apply(
         lambda x: labels_list[int(x)] if pd.notna(x) else "Missing"
     )
@@ -351,6 +382,7 @@ def main():
     json_output = {
         "model_reg": model_reg,
         "model_class": model_class,
+        "missing_counts": missing_counts,
         "join_counts": {
             "regression_rows": pred_info["reg_rows"],
             "classification_rows": pred_info["class_rows"],
