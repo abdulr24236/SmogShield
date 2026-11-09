@@ -4,7 +4,7 @@
 
 ## Overview
 
-SmogShield is an explainable AI-powered web application designed to help residents of Lahore understand air pollution and prepare for changing air-quality conditions.
+SmogShield is an explainable-AI project that aims to help residents of Lahore understand air pollution and prepare for changing air-quality conditions. Deliverable 2 covers the modelling core; the user-facing web application and explainability features are future work (see Scope below).
 
 The project forecasts next-day PM2.5 concentrations and Air Quality Index (AQI) categories using historical air-quality and weather data, with calendar-based proxies standing in for traffic (no open, time-aligned Lahore traffic dataset was found).
 
@@ -86,7 +86,7 @@ Cleaning rules: raw files are never edited; the target is never filled; extreme 
 
 ## Modelling setup
 
-After restoring `data/processed/features_daily.csv`, run the shared contract check from the repository root:
+After restoring `data/processed/features_daily.csv` from the shared Drive, or rebuilding it with `python data_scripts/09_build_features.py`, run the shared contract check from the repository root:
 
 ```bash
 python -m src.check_setup
@@ -95,7 +95,8 @@ python -m src.check_setup
 It prints the chronological split, feature count and per-split class support. The modelling rules are in [`docs/modeling_contract.md`](docs/modeling_contract.md); `src/data.py` and `src/evaluate.py` are the only shared data and metric implementations.
 
 The final Deliverable 2 environment used Python 3.14.4, pandas 3.0.3,
-scikit-learn 1.9.1, and matplotlib 3.11.2. `requirements.txt` requires
+scikit-learn 1.9.1, and matplotlib 3.11.2, captured from `python --version` and
+`pip freeze` in the final-run environment. `requirements.txt` requires
 `scikit-learn>=1.3`.
 
 Run the metric tests after changing `src/evaluate.py`:
@@ -106,8 +107,9 @@ python -m unittest discover -s tests -t .
 
 ## Deliverable 2 model runs
 
-After restoring `data/processed/features_daily.csv`, the three Deliverable 2
-entry points are:
+After restoring `data/processed/features_daily.csv` from the shared Drive, or
+rebuilding it with `python data_scripts/09_build_features.py`, the three
+Deliverable 2 entry points are:
 
 ```bash
 python -m src.classification    # six-class next-day AQI classification
@@ -127,13 +129,16 @@ regression took about 38 seconds, and the bias analysis was quick.
 
 ## Deliverable 2 results
 
-| Task | Selected model | Validation | Test | Persistence test | Outcome |
-|---|---|---|---:|---:|---|
-| Classification | HistGradientBoosting | macro F1 0.4941 | macro F1 0.4780 | macro F1 0.5157 | did not beat persistence |
-| Regression | HistGradientBoosting | RMSE 45.6243 | RMSE 64.9198 | RMSE 64.8175 | did not beat persistence |
+| Task | Selected model | Validation | Test | Persistence validation | Persistence test | Test skill vs persistence | Outcome |
+|---|---|---|---:|---:|---:|---|---|
+| Classification | HistGradientBoosting | macro F1 0.4941 | macro F1 0.4780 | macro F1 0.4766 | macro F1 0.5157 | — | did not beat persistence on test macro F1 |
+| Regression | HistGradientBoosting | RMSE 45.6243 | RMSE 64.9198 | RMSE 51.5457 | RMSE 64.8175 | −0.16% | essentially tied with persistence on test RMSE |
 
-Ridge regression reached test RMSE **62.0956**, which did beat persistence.
-The report states this distinction directly.
+Models were selected on validation only; test results were not used to change
+the selection. For regression, HGB's test RMSE was 64.9198 versus persistence's
+64.8175, a 0.10 RMSE gap. Ridge reached test RMSE **62.0956** (skill **+4.20%**),
+but switching to Ridge after seeing test would violate the validation-only
+selection rule. The report states this distinction directly.
 
 ## Model weights and external artifacts
 
