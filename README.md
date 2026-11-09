@@ -140,6 +140,13 @@ the selection. For regression, HGB's test RMSE was 64.9198 versus persistence's
 but switching to Ridge after seeing test would violate the validation-only
 selection rule. The report states this distinction directly.
 
+Islamic-event subgroup coverage: the validation join contains 25 scorable
+Ramadan rows and no scorable Eid rows. The feature table flags Eid on 10–12
+April and 17–19 June 2024, but the AQI label is missing on those dates; the June
+dates also lack a next-day target. The test join contains only the `Normal`
+group. This is a label-coverage limitation, not a calendar-flag gap, and the
+report makes no Eid-effect claim.
+
 ## Model weights and external artifacts
 
 **No trained model binaries are stored in this repository.** The selected
