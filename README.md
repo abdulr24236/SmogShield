@@ -14,7 +14,7 @@ In addition to forecasting, SmogShield aims to communicate prediction uncertaint
 
 Air pollution is a recurring challenge in Lahore, particularly during the winter smog season. Current air-quality readings describe present conditions but do not explain what is driving pollution or what tomorrow is likely to bring. SmogShield addresses this gap by combining forecasting, interpretable model outputs and historical pollution analysis in an accessible web application.
 
-## Objectives
+## Project objectives (overall vision)
 
 - **Next-day forecasting:** forecast PM2.5 and AQI categories.
 - **Model comparison:** compare several models against a persistence baseline.
@@ -23,6 +23,18 @@ Air pollution is a recurring challenge in Lahore, particularly during the winter
 - **Uncertainty:** provide prediction intervals.
 - **Pattern analysis:** examine recurring pollution patterns, including winter stagnant smog.
 - **Outdoor planning:** identify historically lower-pollution hours.
+
+### Scope of Deliverable 2
+
+Deliverable 2 delivers the modelling and evaluation core: six-class next-day AQI
+classification, next-day PM2.5 regression, and subgroup bias/error analysis
+against persistence baselines. It uses the shared chronological split,
+train-only preprocessing, and the scorable-row mask.
+
+Explainability/SHAP analysis, prediction intervals, the weather/calendar
+ablation study, seasonal pattern analysis, lower-pollution-hour planning, and
+the web application are project vision and future work. They are **not**
+implemented in Deliverable 2 and should not be read as delivered features.
 
 ## Target Audience
 
@@ -82,6 +94,10 @@ python -m src.check_setup
 
 It prints the chronological split, feature count and per-split class support. The modelling rules are in [`docs/modeling_contract.md`](docs/modeling_contract.md); `src/data.py` and `src/evaluate.py` are the only shared data and metric implementations.
 
+The final Deliverable 2 environment used Python 3.14.4, pandas 3.0.3,
+scikit-learn 1.9.1, and matplotlib 3.11.2. `requirements.txt` requires
+`scikit-learn>=1.3`.
+
 Run the metric tests after changing `src/evaluate.py`:
 
 ```bash
@@ -103,23 +119,40 @@ All three use the shared split, scorable-row mask, and metric helpers in
 `src/data.py` and `src/evaluate.py`. Generated metrics and charts are written
 under `outputs/` and are intentionally not committed.
 
+The run order matters: `classification` and `regression` create
+`outputs/model_results/classification_predictions.csv` and
+`regression_predictions.csv`; `bias_analysis` reads both files and must run
+last. On the final machine, classification took about 7 minutes (427.92 s),
+regression took about 38 seconds, and the bias analysis was quick.
+
+## Deliverable 2 results
+
+| Task | Selected model | Validation | Test | Persistence test | Outcome |
+|---|---|---|---:|---:|---|
+| Classification | HistGradientBoosting | macro F1 0.4941 | macro F1 0.4780 | macro F1 0.5157 | did not beat persistence |
+| Regression | HistGradientBoosting | RMSE 45.6243 | RMSE 64.9198 | RMSE 64.8175 | did not beat persistence |
+
+Ridge regression reached test RMSE **62.0956**, which did beat persistence.
+The report states this distinction directly.
+
 ## Model weights and external artifacts
 
-**No trained model binaries are stored in this repository.** The final
-classification, regression, and bias models are refit deterministically by the
-committed scripts from the shared feature table. This keeps the repository well
+**No trained model binaries are stored in this repository.** The selected
+classification and regression pipelines can be refit by the committed scripts
+using fixed seeds from the shared feature table; the bias analysis trains
+nothing and reads the saved prediction files. This keeps the repository well
 below GitHub's 100 MB per-file limit. The `.gitignore` excludes `.joblib`,
 `.pkl`, `.pt`, `.pth`, and `.onnx` model files.
 
-The designated external download link for project data and any exported model
+The external download link for project data and, if exported, fitted model
 weights is the shared Google Drive folder:
 
-<https://drive.google.com/drive/u/1/folders/1gRY4v3sCW90rdJ97O1RFDDux_Dxpd89Y>
+<https://drive.google.com/drive/folders/1gRY4v3sCW90rdJ97O1RFDDux_Dxpd89Y>
 
-The current submission needs no separate weight download: the reproducible code
-is the source of truth. If the team exports final model weights for review, they
-belong in that Drive folder, with the link kept in this README and in
-[`models/README.md`](models/README.md).
+The current submission does not include pretrained weights: the reproducible
+code is the source of truth. If reviewers require fitted weight files, export
+them to a `models/` subfolder in that Drive folder and update this README; do not
+commit the binaries to Git. See [`models/README.md`](models/README.md).
 
 ## Repository Structure
 
@@ -132,6 +165,8 @@ SmogShield/
 ├── configs/             shared split, target and feature configuration
 ├── data_scripts/        Phase 2 code (01-09)
 ├── docs/                modelling contract for Deliverable 2
+├── models/              model-weight policy; no binaries committed
+├── notebooks/           exploratory notebooks
 ├── src/                 shared data/metrics, classification, regression and bias analysis
 ├── tests/               unit tests for the shared metric helpers
 ├── outputs/
