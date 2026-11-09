@@ -88,6 +88,39 @@ Run the metric tests after changing `src/evaluate.py`:
 python -m unittest discover -s tests -t .
 ```
 
+## Deliverable 2 model runs
+
+After restoring `data/processed/features_daily.csv`, the three Deliverable 2
+entry points are:
+
+```bash
+python -m src.classification    # six-class next-day AQI classification
+python -m src.regression        # next-day PM2.5 regression
+python -m src.bias_analysis     # subgroup bias and error analysis
+```
+
+All three use the shared split, scorable-row mask, and metric helpers in
+`src/data.py` and `src/evaluate.py`. Generated metrics and charts are written
+under `outputs/` and are intentionally not committed.
+
+## Model weights and external artifacts
+
+**No trained model binaries are stored in this repository.** The final
+classification, regression, and bias models are refit deterministically by the
+committed scripts from the shared feature table. This keeps the repository well
+below GitHub's 100 MB per-file limit. The `.gitignore` excludes `.joblib`,
+`.pkl`, `.pt`, `.pth`, and `.onnx` model files.
+
+The designated external download link for project data and any exported model
+weights is the shared Google Drive folder:
+
+<https://drive.google.com/drive/u/1/folders/1gRY4v3sCW90rdJ97O1RFDDux_Dxpd89Y>
+
+The current submission needs no separate weight download: the reproducible code
+is the source of truth. If the team exports final model weights for review, they
+belong in that Drive folder, with the link kept in this README and in
+[`models/README.md`](models/README.md).
+
 ## Repository Structure
 
 ```text
@@ -99,7 +132,7 @@ SmogShield/
 ├── configs/             shared split, target and feature configuration
 ├── data_scripts/        Phase 2 code (01-09)
 ├── docs/                modelling contract for Deliverable 2
-├── src/                 shared data loading, metrics and setup checks
+├── src/                 shared data/metrics, classification, regression and bias analysis
 ├── tests/               unit tests for the shared metric helpers
 ├── outputs/
 │   ├── eda_charts/      EDA figures used in the report
@@ -111,9 +144,9 @@ SmogShield/
 
 ## Team
 
-- **Muhammad Haider Mughal (3006)** — calendar construction and feature engineering: public holidays, Ramadan/Eid flags, lagged and rolling features, and the EDA charts.
-- **Muhammad Ayub Butt (3076)** — data cleaning: CAMS daily/hourly validation data and ERA5 weather, including timezone and unit standardisation.
-- **Abdul Rehman (3059)** — data collection and provenance, OpenAQ PM2.5 station cleaning and the AQI pipeline, report integration and reproducibility checks.
+- **Muhammad Haider Mughal (3006)** — D1 calendar construction and feature engineering; D2 six-class next-day AQI classification (`src/classification.py`).
+- **Muhammad Ayub Butt (3076)** — D1 CAMS/ERA5 cleaning; D2 PM2.5 regression and subgroup bias analysis (`src/regression.py`, `src/bias_analysis.py`).
+- **Abdul Rehman (3059)** — data collection and provenance, OpenAQ PM2.5 station cleaning and the AQI pipeline, shared modelling foundation (`src/data.py`, `src/evaluate.py`), integration, D2 report and reproducibility checks.
 
 ## License
 
