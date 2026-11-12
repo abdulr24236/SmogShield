@@ -1,0 +1,187 @@
+% Appendices for the final SmogShield report.
+
+\section{Viva questions and answers}
+\label{app:viva}
+
+\begin{description}[leftmargin=1.2em,style=nextline,itemsep=4pt]
+  \item[What does the app predict?]
+  It predicts tomorrow's PM$_{2.5}$ concentration and tomorrow's AQI category
+  from six values for today: date, PM$_{2.5}$, AQI category, temperature,
+  humidity, and wind speed. The forecast is always for the day after the
+  selected feature date.
+
+  \item[Why are there two AQI category views?]
+  The classifier is a direct six-class model. The implied category converts the
+  regression's predicted PM$_{2.5}$ through the same US-EPA breakpoints used to
+  build the labels, so it is monotonic in the prediction. The classifier was
+  weaker than persistence on test, so the app treats the implied category as the
+  more defensible view and warns when the two disagree.
+
+  \item[Does the model beat persistence?]
+  No. On test, regression RMSE is 64.92 versus 64.82 for persistence, a
+  0.10 $\mu$g/m$^3$ difference and a skill score of $-0.0016$. Classification
+  macro-F1 is 0.4780 versus 0.5157. Ridge reached a lower test RMSE (62.10), but
+  it was not the validation-selected model, so switching to it after seeing test
+  would violate the validation-only rule.
+
+  \item[Why keep a model that does not beat persistence?]
+  The project is an end-to-end explainable system, not an accuracy record. The
+  model was selected on validation, the test result is reported honestly, and
+  the application demonstrates inference, uncertainty, explanations, and
+  reproducibility. Persistence is a strong one-day baseline because PM$_{2.5}$ is
+  highly autocorrelated; failing to beat it is an informative result.
+
+  \item[What is HGB?]
+  Histogram-based gradient boosting. It builds an ensemble of small decision
+  trees sequentially, with each tree correcting the errors of the previous ones.
+  The histogram step bins continuous features for speed. It handles non-linear
+  relationships, interactions, and missing values, and it needs little
+  preprocessing. The frozen settings were selected on validation in Deliverable
+  2.
+
+  \item[What is persistence?]
+  Persistence assumes tomorrow will be the same as today: predicted value at
+  $t+1$ equals the observed value at $t$. For classification, tomorrow's
+  category equals today's. It is the simplest possible forecast and the baseline
+  every model must beat.
+
+  \item[Why macro-F1 instead of accuracy?]
+  Accuracy is dominated by the common \emph{Unhealthy} class. Macro-F1 gives each
+  class equal weight, so it exposes poor performance on the rare hazardous
+  classes. The HGB classifier has slightly higher test accuracy than persistence
+  but lower macro-F1; reporting only accuracy would obscure the rare-class
+  weakness.
+
+  \item[What does the 80\% interval mean?]
+  It is a central interval for the next-day PM$_{2.5}$ observation, built from
+  quantile HGB models at the 10th and 90th percentiles and calibrated on
+  validation. Validation coverage is 80.3\%; test coverage is 77.0\%. The test
+  split is used only to report coverage, never to choose the calibration factor.
+
+  \item[Why is the interval so wide?]
+  The model is uncertain, especially on severe days. The default November
+  example forecasts 189.74 $\mu$g/m$^3$ with an interval of 133.8--294.1. The
+  width is an honest statement about the evidence, not a bug. The backtest on
+  1 November 2024 shows that the actual value can fall outside the interval when
+  the day is an extreme outlier.
+
+  \item[Why only six inputs?]
+  Usability. The remaining features use training medians or modes, and the
+  PM$_{2.5}$ lags and rolling windows are held at today's value. The app calls
+  itself an illustrative single-day forecaster for this reason. A production
+  version would ingest live weather and a multi-day PM$_{2.5}$ history.
+
+  \item[What changed after Deliverable 2?]
+  The model and its reported scores are unchanged; the D3 refit reproduces D2
+  exactly. What is new is the application layer: inference, the Streamlit app,
+  prediction intervals, explanations, the ablation, the hourly profile, the
+  seasonal defaults, and the tests. The D2 code and report were not edited.
+
+  \item[What is the biggest limitation?]
+  The single monitoring station and the severe-tail under-prediction. The model
+  is weakest on the highest-pollution days, which are exactly the days that
+  matter most for public health. A second station, live inputs, and a
+  cost-sensitive or conformal approach are the next steps.
+\end{description}
+
+\section{Glossary}
+\label{app:glossary}
+
+\begin{longtable}{@{}L{3.6cm}L{11.0cm}@{}}
+\toprule
+\textbf{Term} & \textbf{Meaning in this project} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+PM$_{2.5}$ & Fine particulate matter with diameter at most 2.5 $\mu$m, measured
+in $\mu$g/m$^3$. The regression target. \\
+AQI & Air Quality Index, a 0--500 scale computed from PM$_{2.5}$ using the US-EPA
+2012 breakpoints. \\
+HGB & Histogram-based gradient boosting; an ensemble of small trees trained
+sequentially to correct errors. \\
+Regression & Predicting a continuous number, here tomorrow's PM$_{2.5}$. \\
+Classification & Predicting a discrete class, here tomorrow's AQI category. \\
+Persistence & The baseline ``tomorrow equals today.'' \\
+RMSE & Root mean squared error; same units as the target and sensitive to large
+errors. \\
+MAE & Mean absolute error; average absolute miss, in the target's units. \\
+$R^2$ & Fraction of variance explained; 1 is perfect and 0 is no better than the
+mean. \\
+Macro-F1 & The unweighted mean of per-class F1 scores; treats each class equally
+and exposes rare-class performance. \\
+Weighted-F1 & F1 weighted by class support; dominated by the common classes. \\
+Precision and recall & Of the predicted positives, how many are correct; of the
+true positives, how many were found. \\
+Confusion matrix & A table of predicted versus true classes. \\
+Prediction interval & A range for a future observation, here the central 80\%. \\
+Quantile regression & Training a model to predict a conditional percentile rather
+than the mean. \\
+Coverage & The fraction of true values that fall inside the interval. \\
+Calibration & Adjusting interval width so empirical coverage matches the nominal
+level. \\
+Permutation importance & Global importance: the increase in error when a feature
+is shuffled. \\
+Sensitivity & Local importance: the change in the forecast when one input is
+perturbed. \\
+Ablation & Removing feature groups to test whether they improve performance. \\
+Data leakage & Information from validation or test contaminating training;
+prevented here by the seven-day purge and train-only preprocessing. \\
+Class imbalance & Some categories are much rarer than others; handled with
+balanced class weights and macro-F1. \\
+Piecewise constant & A tree model's prediction stays flat inside a leaf, so a
+small input change may have no effect. \\
+Steady state & The app's assumption that today's PM$_{2.5}$ has been stable for
+the past week when it fills lags and rolling windows. \\
+\end{longtable}
+
+\section{File map and build notes}
+\label{app:files}
+
+Table~\ref{tab:filemap} lists the Deliverable 3 files a reviewer is most likely
+to open. The full repository map also includes the Deliverable 1 data scripts and
+the Deliverable 2 modelling code, which are unchanged.
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\begin{tabular}{@{}L{5.4cm}L{9.2cm}@{}}
+\toprule
+\textbf{File} & \textbf{Role} \\
+\midrule
+\texttt{app/app.py} & Streamlit interface: six inputs, forecast cards, interval,
+guidance, charts, expanders \\
+\texttt{src/inference.py} & Loads the four pipelines and metadata; assembles the
+feature row; predicts PM$_{2.5}$, category, interval, explanation, and guidance \\
+\texttt{src/train\_pipeline.py} & Refits the frozen pipelines; writes the joblib
+artifacts and \texttt{metadata.json} \\
+\texttt{src/ablation.py} & Runs the nested history/calendar/weather ablation \\
+\texttt{src/hourly.py} & Builds the hour-of-day and seasonal PM$_{2.5}$ profile \\
+\texttt{tests/test\_inference.py} & Fourteen unit tests for the inference and app
+contract \\
+\texttt{report/make\_figures.py} & Generates the report figures and the worked
+examples from the frozen artifacts \\
+\texttt{report/report\_d3.tex} & This report's master LaTeX file \\
+\texttt{report/phase34\_final.tex} & Deliverable 2 Phase 3--4 body, reused with
+adjusted table paths \\
+\texttt{report/phase56\_final.tex} & New Deliverable 3 Phase 5--6 chapters \\
+\texttt{report/appendix\_final.tex} & Viva questions, glossary, and file map \\
+\texttt{README.md} & Install, run, artifact, and submission notes \\
+\texttt{STUDY\_REPORT.md} & Plain-language technical study report \\
+\texttt{requirements.txt} & Python dependencies for the application layer \\
+\bottomrule
+\end{tabular}
+\caption{Deliverable 3 file map.}
+\label{tab:filemap}
+\end{table}
+
+\paragraph{Build notes.} The report is compiled from the
+\texttt{deliverable\_3/report} directory with Tectonic:
+\begin{verbatim}
+tectonic report_d3.tex
+\end{verbatim}
+The \texttt{report/make\_figures.py} script must be run first if the figures or
+\texttt{examples.json} are missing. The model artifacts must be present for the
+script to compute the worked examples; run \texttt{python -m src.train\_pipeline}
+from \texttt{deliverable\_3} first. The report's numerical tables are taken from
+the frozen D2 metrics and the D3 metadata, ablation, and worked-example files.

@@ -1,0 +1,18 @@
+\begin{table}[htbp]
+\centering
+\scriptsize
+\caption{Selected hyperparameters. Classification used five-fold time-series CV with a seven-day gap and selected on validation macro F1; regression selected on validation RMSE.}
+\label{tab:hyperparameters}
+\begin{tabular}{llL{5.0cm}L{3.2cm}l}
+\toprule
+Task & Model & Selected parameters & Validation metric & Status \\
+\midrule
+Classification & LogisticRegression & \texttt{\{"C": 0.1, "class\_weight": "balanced", "max\_iter": 500, "penalty": "l1"\}} & macro F1 = 0.4665 & completed \\
+Classification & HistGradientBoosting & \texttt{\{"l2\_regularization": 0.1, "learning\_rate": 0.1, "max\_iter": 100, "max\_leaf\_nodes": 31, "min\_samples\_leaf": 10\}} & macro F1 = 0.4941 & selected \\
+Classification & MLP & \texttt{\{"alpha": 0.01, "early\_stopping": true, "hidden\_layer\_sizes": [128, 64, 32], "learning\_rate": "constant", "max\_iter": 500, "n\_iter\_no\_change": 15, "validation\_fraction": 0.1\}} & macro F1 = 0.4124 & excluded \\
+Regression & Ridge & \texttt{\{"alpha": 10.0\}} & RMSE = 45.6916 & not selected \\
+Regression & HGB & \texttt{\{"learning\_rate": 0.05, "max\_depth": 3, "max\_iter": 200\}} & RMSE = 45.6243 & selected \\
+\bottomrule
+\end{tabular}
+
+\end{table}

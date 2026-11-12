@@ -1,0 +1,7 @@
+# Generated review artifacts: regenerate with scripts/build_tables.py
+metrics/*.csv
+metrics/*.json
+metrics/*.txt
+
+# Keep the metrics README as documentation
+!metrics/README.md

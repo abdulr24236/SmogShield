@@ -4,7 +4,7 @@
 
 ## Overview
 
-SmogShield is an explainable-AI project that aims to help residents of Lahore understand air pollution and prepare for changing air-quality conditions. Deliverable 2 covers the modelling core; the user-facing web application and explainability features are future work (see Scope below).
+SmogShield is an explainable-AI project that aims to help residents of Lahore understand air pollution and prepare for changing air-quality conditions. Deliverable 1 covers the problem definition and data foundations, Deliverable 2 the modelling and evaluation core, and Deliverable 3 the user-facing Streamlit application, prediction intervals, explanations, and the final merged report.
 
 The project forecasts next-day PM2.5 concentrations and Air Quality Index (AQI) categories using historical air-quality and weather data, with calendar-based proxies standing in for traffic (no open, time-aligned Lahore traffic dataset was found).
 
@@ -31,10 +31,13 @@ classification, next-day PM2.5 regression, and subgroup bias/error analysis
 against persistence baselines. It uses the shared chronological split,
 train-only preprocessing, and the scorable-row mask.
 
-Explainability/SHAP analysis, prediction intervals, the weather/calendar
-ablation study, seasonal pattern analysis, lower-pollution-hour planning, and
-the web application are project vision and future work. They are **not**
-implemented in Deliverable 2 and should not be read as delivered features.
+Explainability (via permutation importance and local sensitivity), prediction
+intervals, the weather/calendar ablation study, seasonal pattern analysis,
+lower-pollution-hour planning, and the web application are delivered in
+Deliverable 3. They were **not** part of Deliverable 2, so the Deliverable 2
+report should not be read as containing them. SHAP in particular was not
+implemented; the application uses model-agnostic permutation importance and
+one-at-a-time sensitivity instead.
 
 ## Target Audience
 
@@ -147,6 +150,34 @@ dates also lack a next-day target. The test join contains only the `Normal`
 group. This is a label-coverage limitation, not a calendar-flag gap, and the
 report makes no Eid-effect claim.
 
+## Deliverable 3 application
+
+Deliverable 3 (Track A) turns the frozen D2 pipelines into a working,
+explainable application without retraining or reselecting the model. See
+[`deliverable_3/README.md`](deliverable_3/README.md) for the full guide.
+
+- **App:** `deliverable_3/app/app.py` — six inputs (date, PM2.5, AQI category,
+  temperature, humidity, wind), next-day PM2.5 and AQI, two category views,
+  80% interval, local sensitivity, global importance, seasonal defaults,
+  winter-stagnation context, and an hourly profile.
+- **Inference:** `deliverable_3/src/inference.py` — feature assembly, numeric AQI
+  derived from PM2.5, interval construction, explanations, and guidance.
+- **Artifacts:** refit with `python -m src.train_pipeline` from
+  `deliverable_3`; no fitted binaries or processed data are committed.
+- **Tests:** 14 tests pass; the Streamlit AppTest reports no exceptions, four
+  charts, and three expanders.
+- **Final report:** [`deliverable_3/report/report_d3.pdf`](deliverable_3/report/report_d3.pdf)
+  — 47 pages merging D1, D2, and D3.
+- **Launchers:** `setup_env.bat` (create `.venv` and install dependencies),
+  `setup_models.bat` (refit), `run_app.bat` (start the app),
+  `run_ablation.bat` (ablation study).
+
+D3 adds an 80% prediction interval with **80.3% validation** and **77.0% test**
+coverage. The honest headline is unchanged: regression essentially ties
+persistence on test (RMSE 64.92 versus 64.82) and the classifier loses on
+macro-F1 (0.478 versus 0.516). The application shows persistence on every
+forecast and warns when the two category views disagree.
+
 ## Model weights and external artifacts
 
 **No trained model binaries are stored in this repository.** The selected
@@ -180,6 +211,7 @@ SmogShield/
 ├── models/              model-weight policy; no binaries committed
 ├── notebooks/           exploratory notebooks
 ├── src/                 shared data/metrics, classification, regression and bias analysis
+├── deliverable_3/       Phase 5-6 app, inference, tests, report (see its README)
 ├── tests/               unit tests for the shared metric helpers
 ├── outputs/
 │   ├── eda_charts/      EDA figures used in the report
@@ -193,7 +225,7 @@ SmogShield/
 
 - **Muhammad Haider Mughal (3006)** — D1 calendar construction and feature engineering; D2 six-class next-day AQI classification (`src/classification.py`).
 - **Muhammad Ayub Butt (3076)** — D1 CAMS/ERA5 cleaning; D2 PM2.5 regression and subgroup bias analysis (`src/regression.py`, `src/bias_analysis.py`).
-- **Abdul Rehman (3059)** — data collection and provenance, OpenAQ PM2.5 station cleaning and the AQI pipeline, shared modelling foundation (`src/data.py`, `src/evaluate.py`), integration, D2 report and reproducibility checks.
+- **Abdul Rehman (3059)** — data collection and provenance, OpenAQ PM2.5 station cleaning and the AQI pipeline, shared modelling foundation (`src/data.py`, `src/evaluate.py`), integration, D2 report, D3 application/inference/report, and reproducibility checks.
 
 ## License
 

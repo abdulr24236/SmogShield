@@ -1,0 +1,10 @@
+# SmogShield Deliverable 3 (Track A) dependencies
+# Versions match the environment used for the final D3 run (Python 3.14.4).
+pandas==3.0.3
+numpy==2.4.4
+scikit-learn==1.9.1
+joblib==1.6.0
+matplotlib==3.11.2
+streamlit==1.67.0
+python-dateutil==2.9.0.post0
+PyYAML==6.0.3

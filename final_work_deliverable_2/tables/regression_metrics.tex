@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\small
+\caption{Regression results on the chronological validation and test splits. Skill is $1-\mathrm{RMSE}_{model}/\mathrm{RMSE}_{persistence}$.}
+\label{tab:reg-metrics}
+\begin{tabular}{llrrrrr}
+\toprule
+Model & Split & RMSE & MAE & $R^2$ & Skill & $n$ \\
+\midrule
+Persistence & Validation & 51.5457 & 33.5298 & 0.7808 & -- & 244 \\
+Persistence & Test & 64.8175 & 39.9777 & 0.7119 & -- & 222 \\
+Ridge & Validation & 45.6916 & 31.8794 & 0.8277 & 0.1136 & 244 \\
+Ridge & Test & 62.0956 & 38.4750 & 0.7356 & 0.0420 & 222 \\
+\textbf{HGB} & Validation & 45.6243 & 29.9781 & 0.8282 & 0.1149 & 244 \\
+\textbf{HGB} & Test & 64.9198 & 40.7740 & 0.7110 & -0.0016 & 222 \\
+\bottomrule
+\end{tabular}
+
+\end{table}

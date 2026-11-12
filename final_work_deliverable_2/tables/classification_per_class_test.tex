@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\small
+\caption{Per-class test performance of the selected HistGradientBoosting classifier. Good/Moderate and Hazardous (401--500) have small support and should be treated as noisy estimates.}
+\label{tab:clf-per-class}
+\begin{tabular}{lrrrr}
+\toprule
+Category & Support & Precision & Recall & F1 \\
+\midrule
+Good/Moderate & 8 & 0.3750 & 0.3750 & 0.3750 \\
+Unhealthy for Sensitive & 34 & 0.5161 & 0.4706 & 0.4923 \\
+Unhealthy & 77 & 0.7013 & 0.7013 & 0.7013 \\
+Very Unhealthy & 60 & 0.6769 & 0.7333 & 0.7040 \\
+Hazardous (301-400) & 24 & 0.3462 & 0.3750 & 0.3600 \\
+Hazardous (401-500) & 19 & 0.2667 & 0.2105 & 0.2353 \\
+\bottomrule
+\end{tabular}
+
+\end{table}

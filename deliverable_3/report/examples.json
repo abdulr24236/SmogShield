@@ -1,0 +1,71 @@
+{
+  "backtest": {
+    "feature_date": "2024-11-01",
+    "target_date": "2024-11-02",
+    "today_pm25": 156.6,
+    "app_prediction": 159.23,
+    "app_low": 101.7,
+    "app_high": 209.7,
+    "full_prediction": 188.23,
+    "actual_next_day": 278.86,
+    "persistence": 156.6,
+    "app_category": "Very Unhealthy",
+    "classifier_category": "Very Unhealthy",
+    "explanation": [
+      {
+        "input": "Wind +5 km/h",
+        "delta_input": 5.0,
+        "change": -15.93
+      },
+      {
+        "input": "Temperature +5 \u00b0C",
+        "delta_input": 5.0,
+        "change": 15.05
+      },
+      {
+        "input": "PM2.5 +25 \u00b5g/m\u00b3",
+        "delta_input": 25.0,
+        "change": 2.46
+      },
+      {
+        "input": "Humidity +10 points",
+        "delta_input": 10.0,
+        "change": -0.43
+      }
+    ]
+  },
+  "default": {
+    "feature_date": "2026-11-12",
+    "pm25": 234.2,
+    "pm25_category": "Very Unhealthy",
+    "prediction": 189.74,
+    "aqi": 240,
+    "implied_category": "Very Unhealthy",
+    "classifier_category": "Very Unhealthy",
+    "low": 133.8,
+    "high": 294.1,
+    "persistence": 234.2,
+    "explanation": [
+      {
+        "input": "PM2.5 +25 \u00b5g/m\u00b3",
+        "delta_input": 25.0,
+        "change": 38.68
+      },
+      {
+        "input": "Temperature +5 \u00b0C",
+        "delta_input": 5.0,
+        "change": 18.41
+      },
+      {
+        "input": "Wind +5 km/h",
+        "delta_input": 5.0,
+        "change": -7.08
+      },
+      {
+        "input": "Humidity +10 points",
+        "delta_input": 10.0,
+        "change": -0.43
+      }
+    ]
+  }
+}

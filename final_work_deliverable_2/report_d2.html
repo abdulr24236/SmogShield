@@ -1,0 +1,1035 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SmogShield Lahore — Deliverable 2 (Phase 3 and Phase 4)</title>
+<style>
+  @page { size: A4; margin: 17mm 16mm 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #1d2733; line-height: 1.42; font-size: 10.2pt;
+    margin: 0; padding: 0;
+  }
+  h1 { font-size: 22pt; line-height: 1.15; text-align: center; margin: 0 0 2mm 0; }
+  h2 { font-size: 15pt; margin: 8mm 0 2mm 0; padding-bottom: 1mm; border-bottom: 2px solid #2c5f7c; color: #173b51; page-break-after: avoid; }
+  h3 { font-size: 12pt; margin: 5mm 0 1.5mm 0; color: #1f4d68; page-break-after: avoid; }
+  p { margin: 0 0 2.5mm 0; text-align: justify; }
+  ul, ol { margin: 0 0 2.5mm 5mm; padding-left: 4mm; }
+  li { margin-bottom: 1.2mm; }
+  .subtitle { text-align: center; font-size: 12pt; color: #36566a; margin-bottom: 2mm; }
+  .authors { text-align: center; font-size: 10.5pt; margin-bottom: 1mm; }
+  .date { text-align: center; color: #586b78; margin-bottom: 6mm; }
+  .abstract {
+    background: #f2f7fa; border-left: 4px solid #2c5f7c;
+    padding: 4mm 5mm; margin: 3mm 0 5mm 0; font-size: 9.7pt;
+  }
+  .key-box {
+    border: 1px solid #b7cbd7; background: #f8fbfc; padding: 3mm 4mm;
+    margin: 3mm 0 4mm 0; page-break-inside: avoid;
+  }
+  .key-box strong { color: #173b51; }
+  .table-block { margin: 3mm 0 5mm 0; page-break-inside: avoid; }
+  .table-title { font-weight: 600; color: #173b51; margin-bottom: 1mm; font-size: 9.4pt; }
+  table.data { width: 100%; border-collapse: collapse; font-size: 8.4pt; }
+  table.data th { background: #e7f0f5; color: #173b51; border-top: 1.5px solid #4d7e98; border-bottom: 1px solid #4d7e98; padding: 1.4mm 1.2mm; text-align: left; }
+  table.data td { border-bottom: 0.5px solid #cddbe3; padding: 1.1mm 1.2mm; vertical-align: top; }
+  table.data tr:nth-child(even) td { background: #fafcfd; }
+  table.data th:not(:first-child), table.data td:not(:first-child) { text-align: right; }
+  .table-note { font-size: 8.1pt; color: #526875; margin-top: 1mm; text-align: left; }
+  .report-figure { margin: 4mm 0 5mm 0; page-break-inside: avoid; text-align: center; }
+  .report-figure img { max-width: 100%; height: auto; }
+  .report-figure.wide img { width: 100%; }
+  .report-figure.medium img { width: 78%; }
+  figcaption { font-size: 8.3pt; color: #526875; margin-top: 1.2mm; text-align: left; }
+  .small { font-size: 9pt; color: #526875; }
+  .mono { font-family: Consolas, "Courier New", monospace; font-size: 8.7pt; }
+  .pagebreak { page-break-before: always; }
+  .two-col { display: flex; gap: 5mm; }
+  .two-col > div { flex: 1; }
+  .footer-note { margin-top: 8mm; border-top: 1px solid #b7cbd7; padding-top: 2mm; font-size: 8.2pt; color: #586b78; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 8.7pt; background: #f1f5f7; padding: 0 1mm; }
+  @media print {
+    h2 { break-after: avoid; }
+    .table-block, .report-figure, .key-box { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>SmogShield Lahore</h1>
+<div class="subtitle">Deliverable 2: Phase 3 (Model Development) and Phase 4 (Evaluation and Bias Analysis)</div>
+<div class="authors">Muhammad Haider Mughal (3006) &nbsp;|&nbsp; Muhammad Ayub Butt (3076) &nbsp;|&nbsp; Abdul Rehman (3059)</div>
+<div class="date">9 November 2026</div>
+
+<div class="abstract">
+<b>Abstract.</b> This report documents the Deliverable 2 work for SmogShield and covers Phase 3 (model development) and Phase 4 (evaluation and bias analysis). The primary task is six-class next-day AQI-category classification; the secondary task is next-day PM2.5 regression. All experiments use one chronological split, a seven-day purge gap, train-only preprocessing, and a test set touched once per final model. The selected classifier, HistGradientBoosting, achieved a validation macro F1 of 0.4941 and a test macro F1 of 0.4780. It did not beat the persistence baseline on test (0.5157), although its accuracy was slightly higher (0.5856 versus 0.5676). For regression, HistGradientBoosting was selected on validation RMSE (45.6243 versus Ridge 45.6916); its test RMSE was 64.9198, essentially tied with persistence (64.8175, a 0.10 gap and skill −0.0016). Ridge did beat persistence on test with RMSE 62.0956. The bias analysis shows especially large errors on the most severe pollution days; because severity groups are defined by the observed outcome, the sign is partly constructed, and the error magnitude is the informative result. The report states these results as observed rather than tuning the test set after the fact.
+</div>
+
+<div class="key-box">
+<strong>Key outcomes.</strong>
+Classification HGB did <b>not</b> beat persistence on test macro F1
+(0.4780 versus 0.5157). Regression HGB was selected on
+validation only; its test RMSE was <b>essentially tied</b> with persistence
+(64.9198 versus 64.8175, a 0.10 gap and skill
+−0.16%). Ridge did beat persistence (62.0956, skill +4.20%),
+but switching to it after seeing test would violate the selection rule. The
+final modelling code state is <code>a55a7f5</code> on <code>main</code>;
+the README was updated at <code>56dea73</code>.
+</div>
+
+<h2>1. Introduction and objectives</h2>
+<p>SmogShield forecasts next-day air quality for Lahore, Pakistan. The modelling work has two tasks: (1) predict the next-day AQI category among six classes, and (2) predict next-day PM2.5 concentration as a continuous value. The primary task supports the classification analysis required for the project: accuracy, balanced accuracy, macro precision, macro recall, macro F1, weighted F1, one-vs-rest macro AUC-ROC, a confusion matrix, and per-class precision/recall/F1. Macro metrics are primary because the classes are imbalanced. The regression task reports RMSE, MAE, and R², and compares every model with a persistence baseline.</p>
+<p>The guiding rule is that tomorrow's value is unknown at forecast time. Only today's PM2.5, AQI, weather, and calendar information may be used as model inputs. No feature may be derived from <code>shift(-1)</code> or from the test period.</p>
+
+<h3>1.1 Phase coverage</h3>
+<p>This report is the Deliverable 2 submission for Phase 3 and Phase 4. Sections 4–6 cover Phase 3: the model and baseline protocol, classification results, and regression results. Sections 7–10 cover Phase 4: bias and error analysis, limitations and recommendations, reproducibility, and conclusions. Sections 2–3 document the shared data and preprocessing contract that both phases depend on, and Section 1.2 gives the architecture.</p>
+
+<h3>1.2 System architecture</h3>
+<p>Figure 1 summarises the Deliverable 2 path from raw sources to the report. Phase 2 cleaning and feature building produce the shared daily table. The shared loader applies the chronological split, the Good/Moderate label merge, train-only preprocessing, leakage guards, and the scorable-row mask. Classification and regression then run as separate model tracks. Their final predictions feed the shared metrics, the bias/error analysis, the frozen output files, and the report. A future application layer would consume the same forecasts and charts; it would not retrain models. The web application itself is future work and is not part of this deliverable.</p>
+<figure class="report-figure wide" id="figure-1"><img src="figures/architecture.png" alt="architecture.png"><figcaption>Figure 1. Deliverable 2 modelling and evaluation architecture. The shared loader is the single source of split, label, preprocessing, and scorable-row rules. The application forecasts shown in the last box are future work and are not part of Deliverable 2.</figcaption></figure>
+
+<h2>2. Data and chronological split</h2>
+<p>The shared input table is <code>data/processed/features_daily.csv</code>. It contains 2,113 daily rows and 63 columns. It is generated by the Phase 2 feature script and is not committed to Git; it must be restored from the shared Drive or regenerated. The final run used the following split.</p>
+<div class="table-block" id="table-1"><div class="table-title">Table 1. Chronological split with a seven-day purge gap. Scorable rows require a finite current-day PM2.5 value.</div><table class="dataframe data">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Split</th>
+      <th>Start</th>
+      <th>End</th>
+      <th>Rows</th>
+      <th>Scorable</th>
+      <th>Gap (days)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Train</td>
+      <td>2019-05-23</td>
+      <td>2023-06-30</td>
+      <td>1022</td>
+      <td>917</td>
+      <td>7</td>
+    </tr>
+    <tr>
+      <td>Validation</td>
+      <td>2023-07-14</td>
+      <td>2024-06-03</td>
+      <td>250</td>
+      <td>244</td>
+      <td>7</td>
+    </tr>
+    <tr>
+      <td>Test</td>
+      <td>2024-07-08</td>
+      <td>2025-02-16</td>
+      <td>223</td>
+      <td>222</td>
+      <td>7</td>
+    </tr>
+  </tbody>
+</table></div>
+<p>The split is chronological, not random. The seven-day gap removes 2023-07-01 through 2023-07-07 and 2024-07-01 through 2024-07-07 so that a next-day target at the end of one period cannot overlap the first rows of the next period. The validation end is 2024-06-03 rather than the configured 2024-06-30 because the remaining June rows do not have a usable next-day target. This is expected.</p>
+<p>The split contains 1,022 training rows, 250 validation rows, and 223 test rows. The scorable-row mask, which requires a finite current-day PM2.5 value, leaves 917 training rows, 244 validation rows, and 222 test rows. All methods, including persistence, are scored on the same scorable rows. Six validation rows and one test row are dropped for this reason. Classification and regression each produce 473 prediction rows (250 validation plus 223 test), of which 466 are scorable.</p>
+
+<h3>2.1 Target merge and class support</h3>
+<p>The raw table has seven AQI categories. Good has only nine training rows and zero validation and test rows, so it cannot support a separate class. For modelling, Good is merged into Moderate. This is a label decision, not a deletion: the raw category table still contains all seven categories.</p>
+<div class="table-block" id="table-2"><div class="table-title">Table 2. Raw category counts before the Good-to-Moderate merge.</div><table class="dataframe data">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Category</th>
+      <th>Days</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Good</td>
+      <td>9</td>
+    </tr>
+    <tr>
+      <td>Moderate</td>
+      <td>126</td>
+    </tr>
+    <tr>
+      <td>Unhealthy for Sensitive</td>
+      <td>269</td>
+    </tr>
+    <tr>
+      <td>Unhealthy</td>
+      <td>647</td>
+    </tr>
+    <tr>
+      <td>Very Unhealthy</td>
+      <td>256</td>
+    </tr>
+    <tr>
+      <td>Hazardous (301-400)</td>
+      <td>139</td>
+    </tr>
+    <tr>
+      <td>Hazardous (401-500)</td>
+      <td>60</td>
+    </tr>
+    <tr>
+      <td>Total</td>
+      <td>1506</td>
+    </tr>
+  </tbody>
+</table></div>
+<p>After the merge, the six-class support is shown below. Every class has support in every split, so multiclass AUC-ROC is defined. The eight test rows in Good/Moderate and the eleven validation rows in Hazardous 401–500 are small; their per-class precision and recall are noisy, not precise estimates. The two Hazardous bands remain separate in the main analysis.</p>
+<div class="table-block" id="table-3"><div class="table-title">Table 3. Six-class support by chronological split. Good and Moderate are merged for modelling.</div><table class="dataframe data">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Category</th>
+      <th>Train</th>
+      <th>Validation</th>
+      <th>Test</th>
+      <th>Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Good/Moderate</td>
+      <td>109</td>
+      <td>16</td>
+      <td>8</td>
+      <td>133</td>
+    </tr>
+    <tr>
+      <td>Unhealthy for Sensitive</td>
+      <td>175</td>
+      <td>53</td>
+      <td>34</td>
+      <td>262</td>
+    </tr>
+    <tr>
+      <td>Unhealthy</td>
+      <td>488</td>
+      <td>80</td>
+      <td>77</td>
+      <td>645</td>
+    </tr>
+    <tr>
+      <td>Very Unhealthy</td>
+      <td>148</td>
+      <td>47</td>
+      <td>61</td>
+      <td>256</td>
+    </tr>
+    <tr>
+      <td>Hazardous (301-400)</td>
+      <td>72</td>
+      <td>43</td>
+      <td>24</td>
+      <td>139</td>
+    </tr>
+    <tr>
+      <td>Hazardous (401-500)</td>
+      <td>30</td>
+      <td>11</td>
+      <td>19</td>
+      <td>60</td>
+    </tr>
+    <tr>
+      <td>Total</td>
+      <td>1022</td>
+      <td>250</td>
+      <td>223</td>
+      <td>1495</td>
+    </tr>
+  </tbody>
+</table></div>
+<p>Table 2 counts the current-day AQI category over all feature-table rows, while Table 3 counts next-day targets inside the chronological splits. Their totals therefore differ (1,506 versus 1,495).</p>
+
+<h2>3. Features, leakage controls, and preprocessing</h2>
+<p>The shared loader drops <code>date</code>, every <code>target_next_*</code> column, the precomputed <code>*_scaled</code> weather columns, the redundant <code>season</code> string, and <code>year</code> from model inputs. The last choice avoids asking trees to extrapolate to unseen years and avoids unstable linear year trends. Month, day-of-year, and cyclical encodings carry seasonality.</p>
+<p>The loader keeps current-day PM2.5, AQI, weather, and calendar features. It one-hot encodes the current AQI category, median-imputes numeric features, adds missing-value indicators, and applies a robust scaler. Imputers and scalers are fitted on the training split only. In the model frames, <code>pm25_lag1</code> is missing for 13.4% of training rows, 4.0% of validation rows, and 0.4% of test rows, so missing-value indicators are retained rather than treated as pure noise. The loader also raises if a target or precomputed scaled column survives the config lists. The final transformed feature count is 80, from 46 raw features, confirmed by <code>check_setup</code>.</p>
+<p>The loader uses the fixed class labels in <code>configs/base.yaml</code>; labels are never inferred alphabetically from the data. This prevents validation or test labels from changing the class order. The optional label merge is applied only to the classification target, before encoding. The final run used seed 42 and train-only fitting throughout.</p>
+
+<h2>4. Phase 3: Models, baselines, and selection protocol</h2>
+<h3>4.1 Classification</h3>
+<p>The classification candidates were majority class, persistence, logistic regression with class weights, histogram gradient boosting (HGB), and an optional small MLP retained only if it improved validation performance. The persistence baseline uses the majority training class code, 2 (Unhealthy), as its fallback when today's category is missing. The MLP was excluded after validation macro F1 of 0.4124 did not exceed HGB's 0.4941.</p>
+<p>Hyperparameters were tuned with five-fold <code>TimeSeriesSplit</code> on the raw training frame, with a seven-day gap. Tuning never cross-validated on the already-preprocessed training matrix. The final model was refitted on the training split only, not on train plus validation. The test set was then touched once for the final model. The classification selection metric was validation macro F1 over all six configured labels. The CV score is computed per fold over the classes present in that fold, so it is not directly comparable with the six-label validation score; that caveat is recorded in the metrics file.</p>
+<div class="table-block" id="table-4"><div class="table-title">Table 4. Selected hyperparameters. Classification used five-fold time-series CV with a seven-day gap and selected on validation macro F1; regression selected on validation RMSE.</div><table class="dataframe data">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Task</th>
+      <th>Model</th>
+      <th>Selected parameters</th>
+      <th>Validation metric</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Classification</td>
+      <td>LogisticRegression</td>
+      <td>{"C": 0.1, "class_weight": "balanced", "max_iter": 500, "penalty": "l1"}</td>
+      <td>macro F1 = 0.4665</td>
+      <td>completed</td>
+    </tr>
+    <tr>
+      <td>Classification</td>
+      <td>HistGradientBoosting</td>
+      <td>{"l2_regularization": 0.1, "learning_rate": 0.1, "max_iter": 100, "max_leaf_nodes": 31, "min_samples_leaf": 10}</td>
+      <td>macro F1 = 0.4941</td>
+      <td>selected</td>
+    </tr>
+    <tr>
+      <td>Classification</td>
+      <td>MLP</td>
+      <td>{"alpha": 0.01, "early_stopping": true, "hidden_layer_sizes": [128, 64, 32], "learning_rate": "constant", "max_iter": 500, "n_iter_no_change": 15, "validation_fraction": 0.1}</td>
+      <td>macro F1 = 0.4124</td>
+      <td>excluded</td>
+    </tr>
+    <tr>
+      <td>Regression</td>
+      <td>Ridge</td>
+      <td>{"alpha": 10.0}</td>
+      <td>RMSE = 45.6916</td>
+      <td>not selected</td>
+    </tr>
+    <tr>
+      <td>Regression</td>
+      <td>HGB</td>
+      <td>{"learning_rate": 0.05, "max_depth": 3, "max_iter": 200}</td>
+      <td>RMSE = 45.6243</td>
+      <td>selected</td>
+    </tr>
+  </tbody>
+</table><p class="table-note">Status “completed” means tuned but not selected; “excluded” means the optional MLP did not beat HGB on validation.</p></div>
+<p>Regression used persistence, Ridge, and histogram gradient boosting, with the same five-fold time-series procedure and seven-day gap. Model selection used validation RMSE. The selected model was refitted on training rows only and evaluated once on test. Persistence is not imputed for missing current-day PM2.5; it is scored on the same scorable rows as the models. The final code calls the metric helper with <code>allow_missing=False</code> for every method. The option <code>allow_missing=True</code> remains reserved for an unfiltered persistence baseline only; the persistence <code>n_dropped</code> values are 6 validation and 1 test, the same rows on which every method is scored.</p>
+
+<h2>5. Phase 3: Classification results</h2>
+<p>Table 5 reports validation and test metrics for the majority, persistence, logistic regression, and HGB candidates. HGB was selected on validation macro F1 (0.4941 versus 0.4665 for logistic regression). On test, HGB reached macro F1 0.4780, below persistence's 0.5157. HGB's test accuracy was higher than persistence (0.5856 versus 0.5676), but accuracy is dominated by the larger classes; macro F1 exposes the weaker performance on rare classes.</p>
+<div class="table-block" id="table-5"><div class="table-title">Table 5. Classification results on the chronological validation and test splits. Macro F1 is the selection metric.</div><table class="dataframe data">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Model</th>
+      <th>Split</th>
+      <th>Accuracy</th>
+      <th>Balanced accuracy</th>
+      <th>Macro precision</th>
+      <th>Macro recall</th>
+      <th>Macro F1</th>
+      <th>Weighted F1</th>
+      <th>AUC-ROC</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Majority class</td>
+      <td>Validation</td>
+      <td>0.3033</td>
+      <td>0.1667</td>
+      <td>0.0505</td>
+      <td>0.1667</td>
+      <td>0.0776</td>
+      <td>0.1411</td>
+      <td>--</td>
+    </tr>
+    <tr>
+      <td>Majority class</td>
+      <td>Test</td>
+      <td>0.3468</td>
+      <td>0.1667</td>
+      <td>0.0578</td>
+      <td>0.1667</td>
+      <td>0.0858</td>
+      <td>0.1786</td>
+      <td>--</td>
+    </tr>
+    <tr>
+      <td>Persistence</td>
+      <td>Validation</td>
+      <td>0.5697</td>
+      <td>0.4760</td>
+      <td>0.4772</td>
+      <td>0.4760</td>
+      <td>0.4766</td>
+      <td>0.5691</td>
+      <td>--</td>
+    </tr>
+    <tr>
+      <td>Persistence</td>
+      <td>Test</td>
+      <td>0.5676</td>
+      <td>0.5157</td>
+      <td>0.5157</td>
+      <td>0.5157</td>
+      <td>0.5157</td>
+      <td>0.5676</td>
+      <td>--</td>
+    </tr>
+    <tr>
+      <td>Logistic regression</td>
+      <td>Validation</td>
+      <td>0.5287</td>
+      <td>0.4995</td>
+      <td>0.4775</td>
+      <td>0.4995</td>
+      <td>0.4665</td>
+      <td>0.5521</td>
+      <td>0.8842</td>
+    </tr>
+    <tr>
+      <td>Logistic regression</td>
+      <td>Test</td>
+      <td>0.5225</td>
+      <td>0.5062</td>
+      <td>0.4673</td>
+      <td>0.5062</td>
+      <td>0.4601</td>
+      <td>0.5337</td>
+      <td>0.8719</td>
+    </tr>
+    <tr>
+      <td>HGB (selected)</td>
+      <td>Validation</td>
+      <td>0.5943</td>
+      <td>0.4976</td>
+      <td>0.5049</td>
+      <td>0.4976</td>
+      <td>0.4941</td>
+      <td>0.5824</td>
+      <td>0.8765</td>
+    </tr>
+    <tr>
+      <td>HGB (selected)</td>
+      <td>Test</td>
+      <td>0.5856</td>
+      <td>0.4776</td>
+      <td>0.4804</td>
+      <td>0.4776</td>
+      <td>0.4780</td>
+      <td>0.5815</td>
+      <td>0.8886</td>
+    </tr>
+  </tbody>
+</table></div>
+<p>The selected HGB model's test AUC-ROC is 0.8886 and logistic regression's is 0.8719. The one-vs-rest macro AUC is computed from the aligned six-column probability matrix. Rows sum to one within the helper's tolerance. The majority baseline has no probability output, so its AUC is reported as undefined rather than filled with a fake value. HGB's test AUC (0.8886) is higher than its validation AUC (0.8765) even though its test macro F1 is below persistence. AUC measures probability ranking rather than the thresholded label decision, and persistence has no probability output, so the two metrics answer different questions. Persistence's test macro precision, recall, and F1 are all 0.5157, and its weighted F1 equals accuracy (0.5676), because predicted and true class counts coincide exactly on the test rows. This is not a copy error; it is a property of the persistence shift on this series.</p>
+<div class="table-block" id="table-6"><div class="table-title">Table 6. Per-class test performance of the selected HistGradientBoosting classifier. Good/Moderate and Hazardous 401–500 have small support and should be treated as noisy estimates.</div><table class="dataframe data">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Category</th>
+      <th>Support</th>
+      <th>Precision</th>
+      <th>Recall</th>
+      <th>F1</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Good/Moderate</td>
+      <td>8</td>
+      <td>0.375000</td>
+      <td>0.375000</td>
+      <td>0.375000</td>
+    </tr>
+    <tr>
+      <td>Unhealthy for Sensitive</td>
+      <td>34</td>
+      <td>0.516129</td>
+      <td>0.470588</td>
+      <td>0.492308</td>
+    </tr>
+    <tr>
+      <td>Unhealthy</td>
+      <td>77</td>
+      <td>0.701299</td>
+      <td>0.701299</td>
+      <td>0.701299</td>
+    </tr>
+    <tr>
+      <td>Very Unhealthy</td>
+      <td>60</td>
+      <td>0.676923</td>
+      <td>0.733333</td>
+      <td>0.704000</td>
+    </tr>
+    <tr>
+      <td>Hazardous (301-400)</td>
+      <td>24</td>
+      <td>0.346154</td>
+      <td>0.375000</td>
+      <td>0.360000</td>
+    </tr>
+    <tr>
+      <td>Hazardous (401-500)</td>
+      <td>19</td>
+      <td>0.266667</td>
+      <td>0.210526</td>
+      <td>0.235294</td>
+    </tr>
+  </tbody>
+</table></div>
+<p>The largest class, Unhealthy, has F1 0.7013, while Very Unhealthy has F1 0.7040. The two Hazardous bands are weaker: 0.3600 and 0.2353. The confusion matrix below shows frequent confusion between Unhealthy for Sensitive and Unhealthy, and between the two Hazardous bands and Very Unhealthy. This is consistent with ordered severity classes and with the class imbalance.</p>
+<div class="table-block" id="table-7"><div class="table-title">Table 7. Selected HGB test confusion matrix. Codes: 0 Good/Moderate, 1 Unhealthy for Sensitive, 2 Unhealthy, 3 Very Unhealthy, 4 Hazardous 301–400, 5 Hazardous 401–500.</div><table class="dataframe data">
+  <thead>
+    <tr style="text-align: right;">
+      <th>True</th>
+      <th>Pred 0</th>
+      <th>Pred 1</th>
+      <th>Pred 2</th>
+      <th>Pred 3</th>
+      <th>Pred 4</th>
+      <th>Pred 5</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>0</td>
+      <td>3</td>
+      <td>2</td>
+      <td>3</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>4</td>
+      <td>16</td>
+      <td>14</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>1</td>
+      <td>13</td>
+      <td>54</td>
+      <td>6</td>
+      <td>2</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>0</td>
+      <td>0</td>
+      <td>6</td>
+      <td>44</td>
+      <td>7</td>
+      <td>3</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>8</td>
+      <td>9</td>
+      <td>7</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>7</td>
+      <td>8</td>
+      <td>4</td>
+    </tr>
+  </tbody>
+</table></div>
+<figure class="report-figure medium" id="figure-2"><img src="figures/classification_confusion_histgradientboosting_test.png" alt="classification_confusion_histgradientboosting_test.png"><figcaption>Figure 2. Selected HGB test confusion matrix. The raw matrix is also given in Table 7.</figcaption></figure>
+<figure class="report-figure medium" id="figure-3"><img src="figures/classification_hgb_val_curve.png" alt="classification_hgb_val_curve.png"><figcaption>Figure 3. Validation macro F1 for the HGB configuration used in model selection.</figcaption></figure>
+<figure class="report-figure medium" id="figure-4"><img src="figures/classification_lr_C_curve.png" alt="classification_lr_C_curve.png"><figcaption>Figure 4. Logistic-regression validation curve over the regularisation strength C. The selected value was C = 0.1.</figcaption></figure>
+<p><b>Training curves.</b> A per-epoch training-loss curve exists only for the MLP, which was excluded because its validation macro F1 (0.4124) did not exceed that of HGB (0.4941). For logistic regression (full-batch solver) and HGB (no per-epoch loss recorded in our configuration) we report validation-score curves instead (Figures 3, 4, and 9). Figure 3 is nearly flat (macro F1 between about 0.490 and 0.502), so the iteration count is not a sensitive parameter.</p>
+
+<h2>6. Phase 3: Regression results</h2>
+<p>Table 8 reports the regression comparison. On validation, HGB had the lowest RMSE (45.6243), narrowly ahead of Ridge (45.6916); both beat persistence (51.5457) by about 11.4–11.5%. On test, however, HGB reached 64.9198, essentially tied with persistence (64.8175, a 0.10 RMSE gap); its skill score was −0.0016. Ridge reached 62.0956 on test and beat persistence, with skill 0.0420. R² follows the same pattern: Ridge's test R² is 0.7356, HGB's is 0.7110, and persistence's is 0.7119.</p>
+<p>This is a genuine validation-to-test reversal, not a reporting error. The selection rule chose HGB on validation RMSE before test was touched. The report keeps that selection and reports the test outcome honestly. It does not switch the final model to Ridge after seeing test.</p>
+<div class="table-block" id="table-8"><div class="table-title">Table 8. Regression results on the chronological validation and test splits. Skill is 1 − RMSE_model / RMSE_persistence.</div><table class="dataframe data">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Model</th>
+      <th>Split</th>
+      <th>RMSE</th>
+      <th>MAE</th>
+      <th>R2</th>
+      <th>Skill vs persistence</th>
+      <th>n</th>
+      <th>Dropped</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Persistence</td>
+      <td>Validation</td>
+      <td>51.5457</td>
+      <td>33.5298</td>
+      <td>0.7808</td>
+      <td>--</td>
+      <td>244</td>
+      <td>6</td>
+    </tr>
+    <tr>
+      <td>Persistence</td>
+      <td>Test</td>
+      <td>64.8175</td>
+      <td>39.9777</td>
+      <td>0.7119</td>
+      <td>--</td>
+      <td>222</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>Ridge</td>
+      <td>Validation</td>
+      <td>45.6916</td>
+      <td>31.8794</td>
+      <td>0.8277</td>
+      <td>0.1136</td>
+      <td>244</td>
+      <td>6</td>
+    </tr>
+    <tr>
+      <td>Ridge</td>
+      <td>Test</td>
+      <td>62.0956</td>
+      <td>38.4750</td>
+      <td>0.7356</td>
+      <td>0.0420</td>
+      <td>222</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>HGB (selected)</td>
+      <td>Validation</td>
+      <td>45.6243</td>
+      <td>29.9781</td>
+      <td>0.8282</td>
+      <td>0.1149</td>
+      <td>244</td>
+      <td>6</td>
+    </tr>
+    <tr>
+      <td>HGB (selected)</td>
+      <td>Test</td>
+      <td>64.9198</td>
+      <td>40.7740</td>
+      <td>0.7110</td>
+      <td>-0.0016</td>
+      <td>222</td>
+      <td>1</td>
+    </tr>
+  </tbody>
+</table></div>
+<p>All models are scored on the same 244 validation and 222 test scorable rows; the 6 validation and 1 test rows dropped for missing current-day PM2.5 are not scored.</p>
+<figure class="report-figure medium" id="figure-5"><img src="figures/regression_metric_comparison.png" alt="regression_metric_comparison.png"><figcaption>Figure 5. Regression metric comparison across candidate models and splits.</figcaption></figure>
+<figure class="report-figure wide" id="figure-6"><img src="figures/regression_hist_gb_pred_vs_actual.png" alt="regression_hist_gb_pred_vs_actual.png"><figcaption>Figure 6. Selected HGB regression: predicted versus actual next-day PM2.5.</figcaption></figure>
+<figure class="report-figure wide" id="figure-7"><img src="figures/regression_hist_gb_residuals_over_time.png" alt="regression_hist_gb_residuals_over_time.png"><figcaption>Figure 7. Selected HGB regression residuals over time.</figcaption></figure>
+<figure class="report-figure medium" id="figure-8"><img src="figures/regression_hist_gb_error_by_severity.png" alt="regression_hist_gb_error_by_severity.png"><figcaption>Figure 8. Selected HGB regression error by pollution severity.</figcaption></figure>
+<figure class="report-figure medium" id="figure-9"><img src="figures/regression_hgb_learning_curve.png" alt="regression_hgb_learning_curve.png"><figcaption>Figure 9. HGB regression learning curve used as training diagnostic material.</figcaption></figure>
+
+<h2>7. Phase 4: Bias and error analysis</h2>
+<p>The bias analysis joins the final regression and classification predictions on date and split. It uses 466 joined rows: 244 validation and 222 test. The subgroup table has 47 rows across seven dimensions: AQI category, season, year, weekday versus weekend, Islamic events, public holidays, and PM2.5 severity band. Missing subgroup keys were counted per split and dimension; all counts were zero in the final join.</p>
+<p>The joined validation rows contain 25 scorable Ramadan rows and no scorable Eid rows. The feature table flags Eid on 10–12 April and 17–19 June 2024, but the AQI label is missing on those dates; all six dates also lack a next-day target, so they never enter the split. This is a label-coverage limitation, not a calendar-flag gap. The test split has only one Islamic-event group, <code>Normal</code>; no test Ramadan or Eid comparison is therefore possible. Public-holiday test rows number only seven, so the holiday result is marked as small-support. The analysis is environmental and temporal, not demographic: the dataset has one monitoring station and no demographic attributes. It cannot establish fairness across people or neighbourhoods.</p>
+<div class="table-block" id="table-9"><div class="table-title">Table 9. Missing subgroup keys after joining regression and classification predictions.</div><table class="dataframe data">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Dimension</th>
+      <th>Validation missing</th>
+      <th>Test missing</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>AQI Category</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>Islamic_Event</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>Public_Holiday</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>Season</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>Severity_Band</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>Weekday_Weekend</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>Year</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table></div>
+<p>Table 10 reports the test subgroups. Positive signed error is y_true − y_pred, so a positive value means under-prediction relative to the observed PM2.5. The most important pattern is the severe-pollution tail. Hazardous 401–500 has RMSE 162.14 and signed error 141.70; the 301–500 severity band has RMSE 99.60 and signed error 75.72; and the 500+ band, with only five rows, has RMSE 242.00 and signed error 230.76. These are large errors, not just noise, although the 500+ estimate is unstable because of its tiny support. Severity bands and AQI-category groups are defined by the observed outcome, so high-severity groups look under-predicted and low-severity groups over-predicted partly by construction. The size of the errors (for example RMSE 99.60 on the 301–500 band), not the sign, is the informative result.</p>
+<div class="table-block" id="table-10"><div class="table-title">Table 10. Test-set subgroup error and classification performance. Positive signed error means under-prediction. Small-support groups (n < 30) are identified in the final column.</div><table class="dataframe data">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Dimension</th>
+      <th>Group</th>
+      <th>n</th>
+      <th>RMSE</th>
+      <th>MAE</th>
+      <th>Signed error</th>
+      <th>Accuracy</th>
+      <th>Macro F1</th>
+      <th>Small support</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>AQI Category</td>
+      <td>Good/Moderate</td>
+      <td>8</td>
+      <td>25.4601</td>
+      <td>23.6583</td>
+      <td>-23.6583</td>
+      <td>0.3750</td>
+      <td>0.5455</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>AQI Category</td>
+      <td>Unhealthy for Sensitive</td>
+      <td>34</td>
+      <td>12.5892</td>
+      <td>9.8540</td>
+      <td>-7.1164</td>
+      <td>0.4706</td>
+      <td>0.6400</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>AQI Category</td>
+      <td>Unhealthy</td>
+      <td>77</td>
+      <td>43.8019</td>
+      <td>27.9535</td>
+      <td>-11.1751</td>
+      <td>0.7013</td>
+      <td>0.8244</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>AQI Category</td>
+      <td>Very Unhealthy</td>
+      <td>60</td>
+      <td>59.1430</td>
+      <td>44.7748</td>
+      <td>-27.9941</td>
+      <td>0.7333</td>
+      <td>0.8462</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>AQI Category</td>
+      <td>Hazardous (301-400)</td>
+      <td>24</td>
+      <td>53.2085</td>
+      <td>41.5136</td>
+      <td>11.8486</td>
+      <td>0.3750</td>
+      <td>0.5455</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>AQI Category</td>
+      <td>Hazardous (401-500)</td>
+      <td>19</td>
+      <td>162.1417</td>
+      <td>141.6998</td>
+      <td>141.6998</td>
+      <td>0.2105</td>
+      <td>0.3478</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>Season</td>
+      <td>Winter</td>
+      <td>76</td>
+      <td>72.3755</td>
+      <td>52.6206</td>
+      <td>-17.4306</td>
+      <td>0.6053</td>
+      <td>0.4494</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Season</td>
+      <td>Summer</td>
+      <td>55</td>
+      <td>19.6486</td>
+      <td>15.0855</td>
+      <td>0.7674</td>
+      <td>0.5091</td>
+      <td>0.4763</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Season</td>
+      <td>Autumn</td>
+      <td>91</td>
+      <td>75.3234</td>
+      <td>46.4062</td>
+      <td>14.1519</td>
+      <td>0.6154</td>
+      <td>0.4358</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Year</td>
+      <td>2024</td>
+      <td>177</td>
+      <td>63.6013</td>
+      <td>39.2136</td>
+      <td>0.7755</td>
+      <td>0.5763</td>
+      <td>0.4832</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Year</td>
+      <td>2025</td>
+      <td>45</td>
+      <td>69.8649</td>
+      <td>46.9118</td>
+      <td>-2.9323</td>
+      <td>0.6222</td>
+      <td>0.4306</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Weekday_Weekend</td>
+      <td>Weekday</td>
+      <td>158</td>
+      <td>68.3224</td>
+      <td>41.7848</td>
+      <td>1.0546</td>
+      <td>0.6139</td>
+      <td>0.4875</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Weekday_Weekend</td>
+      <td>Weekend</td>
+      <td>64</td>
+      <td>55.6356</td>
+      <td>38.2786</td>
+      <td>-2.5206</td>
+      <td>0.5156</td>
+      <td>0.4276</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Severity_Band</td>
+      <td>0-50</td>
+      <td>31</td>
+      <td>17.6658</td>
+      <td>14.2902</td>
+      <td>-12.6398</td>
+      <td>0.4839</td>
+      <td>0.5386</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Severity_Band</td>
+      <td>51-100</td>
+      <td>60</td>
+      <td>26.2778</td>
+      <td>15.2874</td>
+      <td>1.1969</td>
+      <td>0.6333</td>
+      <td>0.5302</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Severity_Band</td>
+      <td>101-150</td>
+      <td>28</td>
+      <td>61.8758</td>
+      <td>47.0172</td>
+      <td>-34.7032</td>
+      <td>0.7143</td>
+      <td>0.8333</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>Severity_Band</td>
+      <td>151-200</td>
+      <td>31</td>
+      <td>66.9282</td>
+      <td>51.5369</td>
+      <td>-42.0886</td>
+      <td>0.8387</td>
+      <td>0.9123</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Severity_Band</td>
+      <td>201-300</td>
+      <td>43</td>
+      <td>50.0110</td>
+      <td>38.7876</td>
+      <td>-8.5917</td>
+      <td>0.5349</td>
+      <td>0.5635</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Severity_Band</td>
+      <td>301-500</td>
+      <td>24</td>
+      <td>99.6015</td>
+      <td>81.4907</td>
+      <td>75.7243</td>
+      <td>0.2083</td>
+      <td>0.2556</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>Severity_Band</td>
+      <td>500+</td>
+      <td>5</td>
+      <td>242.0043</td>
+      <td>230.7646</td>
+      <td>230.7646</td>
+      <td>0.6000</td>
+      <td>0.7500</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>Islamic_Event</td>
+      <td>Normal</td>
+      <td>222</td>
+      <td>64.9198</td>
+      <td>40.7740</td>
+      <td>0.0239</td>
+      <td>0.5856</td>
+      <td>0.4780</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Public_Holiday</td>
+      <td>Normal</td>
+      <td>215</td>
+      <td>65.6586</td>
+      <td>41.4275</td>
+      <td>-0.3726</td>
+      <td>0.5767</td>
+      <td>0.4680</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>Public_Holiday</td>
+      <td>Holiday</td>
+      <td>7</td>
+      <td>35.3757</td>
+      <td>20.7040</td>
+      <td>12.2017</td>
+      <td>0.8571</td>
+      <td>0.7333</td>
+      <td>yes</td>
+    </tr>
+  </tbody>
+</table><p class="table-note">Subgroup macro F1 is computed within each subgroup over the true classes present, so it is not comparable across groups or with Table 5. For AQI Category rows, use accuracy (= recall). The full 14-chart bias set is included in figures/; the report shows selected test charts below.</p></div>
+<p>Seasonal errors are also uneven. Winter test RMSE is 72.38 with signed error −17.43, indicating average over-prediction, while autumn RMSE is 75.32 with signed error +14.15, indicating average under-prediction. Summer is much easier (RMSE 19.65). Test 2025 has only 45 rows (1 January–16 February, winter), whereas 2024 has 177 mixed-season rows. The 2025 comparison is therefore confounded with season: RMSE is 69.86 versus 63.60, and macro F1 is 0.4306 versus 0.4832, but this is not a clean temporal comparison. Weekday RMSE is higher than weekend RMSE (68.32 versus 55.64), though weekend macro F1 is lower (0.4276 versus 0.4875).</p>
+<figure class="report-figure wide" id="figure-10"><img src="figures/bias_Severity_Band_test.png" alt="bias_Severity_Band_test.png"><figcaption>Figure 10. Test signed error and classification accuracy by PM2.5 severity band. Because groups are defined by the observed outcome, the sign is partly constructed; the error magnitude is the informative result. Small groups are marked with an asterisk.</figcaption></figure>
+<figure class="report-figure wide" id="figure-11"><img src="figures/bias_Season_test.png" alt="bias_Season_test.png"><figcaption>Figure 11. Test signed error and classification accuracy by season.</figcaption></figure>
+<figure class="report-figure wide" id="figure-12"><img src="figures/bias_AQI_Category_test.png" alt="bias_AQI_Category_test.png"><figcaption>Figure 12. Test signed error and classification accuracy by observed AQI category.</figcaption></figure>
+<figure class="report-figure wide" id="figure-13"><img src="figures/bias_Year_test.png" alt="bias_Year_test.png"><figcaption>Figure 13. Test signed error and classification accuracy by year.</figcaption></figure>
+<figure class="report-figure wide" id="figure-14"><img src="figures/bias_Weekday_Weekend_test.png" alt="bias_Weekday_Weekend_test.png"><figcaption>Figure 14. Test signed error and classification accuracy for weekday versus weekend rows.</figcaption></figure>
+<figure class="report-figure wide" id="figure-15"><img src="figures/bias_Public_Holiday_test.png" alt="bias_Public_Holiday_test.png"><figcaption>Figure 15. Test signed error and classification accuracy for normal days versus public holidays. Holiday support is only seven rows.</figcaption></figure>
+<p>The class mix also shifts across periods. Unhealthy is about 48% of training rows but 32% of validation and 35% of test. The two Hazardous bands together are about 10% of training but 22% of validation and 19% of test. This may reflect seasonal composition, missing training days or targets, or real worsening; the data do not identify a single cause. The later-period under-prediction of severe days is consistent with that shift, but it is not proof of a causal trend.</p>
+
+<h2>8. Phase 4: Limitations and recommendations</h2>
+<ul>
+  <li><b>Rare-class uncertainty.</b> Good/Moderate has 8 test rows and Hazardous 401–500 has 19. Their per-class precision/recall are noisy. The same applies to small bias subgroups such as public holidays and the 500+ severity band.</li>
+  <li><b>Single station.</b> The dataset represents one monitoring location and has no demographic attributes. The bias check cannot support claims about population-level fairness.</li>
+  <li><b>Distribution shift.</b> The class mix and the validation-to-test error pattern change over time. A model selected on validation can fail to beat persistence on a later period, as happened on both tasks (macro F1 below persistence for classification, and essentially tied on RMSE for regression).</li>
+  <li><b>Coverage gaps.</b> The validation split contains 250 usable rows over the 326 days from 2023-07-14 to 2024-06-03 (about 77%), because many days lack an AQI label or a next-day target; the test split has 223 rows over the 224 days from 2024-07-08 to 2025-02-16 and contains no spring rows. Validation and test therefore cover different seasonal mixes, which limits how directly their metrics can be compared.</li>
+  <li><b>Macro F1 versus accuracy.</b> HGB's test accuracy is higher than persistence's, but its macro F1 is lower. Reporting only accuracy would obscure the rare-class weakness.</li>
+  <li><b>No traffic data.</b> Calendar features are proxies; no open, time-aligned Lahore traffic dataset was available. This limits the explanatory scope of the features.</li>
+  <li><b>No test-time retuning.</b> The report preserves the validation-based selection. Switching to Ridge after seeing test would be post-hoc and would invalidate the test-once rule.</li>
+</ul>
+<p>Recommended next steps are to collect more severe-pollution days, evaluate cost-sensitive or class-balanced variants with a pre-registered validation rule, add calibrated probabilities and prediction intervals, and test on a later period or a second station. Any such change should be selected without using the current test set.</p>
+
+<h2>9. Phase 4: Reproducibility</h2>
+<p>The final results were produced from merge commit <code>a55a7f5</code> on <code>main</code>; the repository README was updated afterwards (commit <code>56dea73</code>). The final pipeline was run from the repository root with the commands below.</p>
+<pre class="mono">python -m src.check_setup
+python -m unittest discover -s tests -t .
+python -m src.classification
+python -m src.regression
+python -m src.bias_analysis</pre>
+<p><code>check_setup</code> reported 0 bad next-day PM2.5 values, 0 bad lag-1 values, and 0 bad next-day categories. The unit tests ran 15 tests and passed. Classification completed in 427.92 seconds and regression in 37.61 seconds. The bias analysis then joined the final prediction files.</p>
+<p>The classification prediction file has 473 rows and 12 columns; 466 rows are scorable. Its SHA-256 hash is <code>47D8E0A89FC3F37EA6B74E807DCF566FBDD6D79F734D5A05CFD56124888EB2EB</code>, matching the verified Drive copy. Regression also has 473 prediction rows, 466 scorable.</p>
+<p>Dependencies are listed in <code>requirements.txt</code>. The final environment used pandas 3.0.3, scikit-learn 1.9.1, and matplotlib 3.11.2. The seed is 42 from <code>configs/base.yaml</code>. Generated prediction CSVs, metrics JSON, and charts are review artifacts and should not be committed to Git; the data and large artifacts belong on the shared Drive or a release link. No fitted model weights are published: the selected pipelines are refit from fixed seeds by the committed scripts (see the repository README).</p>
+
+<h3>9.1 Git-author contributions</h3>
+<p>Table 11 is the Git-author contribution table: it maps each commit author to the project modules and representative commits they own. The repository history contains only the three project contributors. The Git identities used in the D2 work are Abdul Rehman &lt;arehman4275@gmail.com&gt;, Muhammad Haider Mughal &lt;haiderirfanmm@gmail.com&gt;, and Muhammad Ayub Butt &lt;purestudy83010@gmail.com&gt;. Some earlier commits by the same author also appear under the display name “Haider Mughal” with the same e-mail address. No AI or OpenCode co-author trailer was added.</p>
+<div class="table-block" id="table-11"><div class="table-title">Table 11. Git-author contribution table mapping commit authors to project modules. Exactly the three human project contributors are listed.</div><table class="dataframe data">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Contributor</th>
+      <th>Student ID</th>
+      <th>Git identity</th>
+      <th>D2 contribution</th>
+      <th>Key modules and representative commits</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Abdul Rehman</td>
+      <td>3059</td>
+      <td>Abdul Rehman &lt;arehman4275@gmail.com&gt;</td>
+      <td>Shared data and evaluation foundation; integration; D2 report</td>
+      <td>src/data.py; src/evaluate.py; src/check_setup.py; configs/base.yaml; tests/test_evaluate.py; reports/ (b672bfc, 20fa79e, a55a7f5)</td>
+    </tr>
+    <tr>
+      <td>Muhammad Haider Mughal</td>
+      <td>3006</td>
+      <td>Muhammad Haider Mughal &lt;haiderirfanmm@gmail.com&gt;</td>
+      <td>Classification pipeline and tuning</td>
+      <td>src/classification.py (d311f8e, 5f57987)</td>
+    </tr>
+    <tr>
+      <td>Muhammad Ayub Butt</td>
+      <td>3076</td>
+      <td>Muhammad Ayub Butt &lt;purestudy83010@gmail.com&gt;</td>
+      <td>Regression and bias analysis</td>
+      <td>src/regression.py; src/bias_analysis.py (fae7490, 6e2448d)</td>
+    </tr>
+  </tbody>
+</table></div>
+
+<h2>10. Phase 4: Conclusion</h2>
+<p>The primary classification model, HGB, was selected on validation macro F1 and reached 0.4780 on test. It did not beat persistence's 0.5157 macro F1, even though its accuracy was slightly higher. The secondary regression model, HGB, was selected on validation RMSE only; test results were not used to change the selection. Its test RMSE was 64.9198, essentially tied with persistence's 64.8175 (a 0.10 gap and skill −0.0016). Ridge did beat persistence on test with RMSE 62.0956, but switching to it after seeing test would violate the validation-only selection rule. The bias analysis shows that the largest error magnitudes occur on the most severe pollution days; because those groups are defined by the observed outcome, the sign is partly constructed, so the magnitude is the informative result. Seasonal and temporal errors are also uneven. These results are reported as observed, without retuning on the test set.</p>
+
+<h2>References</h2>
+<p class="small">U.S. Environmental Protection Agency, “Technical Assistance Document for the Reporting of Daily Air Quality — the Air Quality Index (AQI),” EPA-454/B-18-007, September 2018.</p>
+<p class="small">World Health Organization, “Ambient (outdoor) air pollution,” fact sheet, 24 October 2024.</p>
+<p class="small">R. Majeed et al., “Solving the mysteries of Lahore smog: the fifth season in the country,” Frontiers in Sustainable Cities, vol. 5, art. 1314426, 2024.</p>
+<p class="small">F. Pedregosa et al., “Scikit-learn: Machine Learning in Python,” Journal of Machine Learning Research, vol. 12, pp. 2825–2830, 2011.</p>
+<p class="small">J. H. Friedman, “Greedy Function Approximation: A Gradient Boosting Machine,” Annals of Statistics, vol. 29, no. 5, pp. 1189–1232, 2001.</p>
+
+<div class="footer-note">
+Generated from the frozen final outputs on <code>main</code> at <code>a55a7f5</code>
+(the README was updated at <code>56dea73</code>).
+The LaTeX source is <code>report_d2.tex</code>; tables are in <code>tables/</code>,
+figures in <code>figures/</code>, frozen metrics in <code>metrics/</code>, and
+verification evidence in <code>evidence/</code>.
+</div>
+
+</body>
+</html>

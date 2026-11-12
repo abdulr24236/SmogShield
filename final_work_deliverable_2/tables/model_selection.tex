@@ -1,0 +1,15 @@
+\begin{table}[htbp]
+\centering
+\small
+\caption{Model selection outcomes and the test comparison with persistence.}
+\label{tab:model-selection}
+\begin{tabular}{llllll}
+\toprule
+Task & Selected & Selection metric & Val. & Test & Persistence test \\
+\midrule
+Classification & HistGradientBoosting & validation macro F1 & 0.4941 & 0.4780 & 0.5157 \\
+Regression & HGB & validation RMSE & 45.6243 & 64.9198 & 64.8175 \\
+\bottomrule
+\end{tabular}
+
+\end{table}

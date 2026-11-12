@@ -1,0 +1,4 @@
+Contributor,Student ID,Git identity,D2 contribution,Key modules and representative commits
+Abdul Rehman,3059,Abdul Rehman <arehman4275@gmail.com>,Shared data and evaluation foundation; integration; D2 report,"src/data.py; src/evaluate.py; src/check_setup.py; configs/base.yaml; tests/test_evaluate.py; reports/ (b672bfc, 20fa79e, a55a7f5)"
+Muhammad Haider Mughal,3006,Muhammad Haider Mughal <haiderirfanmm@gmail.com>,Classification pipeline and tuning,"src/classification.py (d311f8e, 5f57987)"
+Muhammad Ayub Butt,3076,Muhammad Ayub Butt <purestudy83010@gmail.com>,Regression and bias analysis,"src/regression.py; src/bias_analysis.py (fae7490, 6e2448d)"

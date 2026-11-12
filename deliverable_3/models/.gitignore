@@ -1,0 +1,7 @@
+# Fitted model binaries and generated result artifacts are recreated by
+# `python -m src.train_pipeline` and `python -m src.ablation`, so they must NOT
+# be committed. The report and README carry the evaluated numbers.
+*.joblib
+metadata.json
+ablation.json
+__pycache__/

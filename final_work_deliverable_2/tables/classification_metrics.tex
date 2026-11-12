@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\centering
+\scriptsize
+\caption{Classification results on the chronological validation and test splits. Macro F1 is the selection metric.}
+\label{tab:clf-metrics}
+\begin{tabular}{llrrrrrrr}
+\toprule
+Model & Split & Acc. & Bal. acc. & Macro P & Macro R & Macro F1 & Wtd. F1 & AUC \\
+\midrule
+Majority class & Validation & 0.3033 & 0.1667 & 0.0505 & 0.1667 & 0.0776 & 0.1411 & -- \\
+Majority class & Test & 0.3468 & 0.1667 & 0.0578 & 0.1667 & 0.0858 & 0.1786 & -- \\
+Persistence & Validation & 0.5697 & 0.4760 & 0.4772 & 0.4760 & 0.4766 & 0.5691 & -- \\
+Persistence & Test & 0.5676 & 0.5157 & 0.5157 & 0.5157 & 0.5157 & 0.5676 & -- \\
+Logistic regression & Validation & 0.5287 & 0.4995 & 0.4775 & 0.4995 & 0.4665 & 0.5521 & 0.8842 \\
+Logistic regression & Test & 0.5225 & 0.5062 & 0.4673 & 0.5062 & 0.4601 & 0.5337 & 0.8719 \\
+\textbf{HGB} & Validation & 0.5943 & 0.4976 & 0.5049 & 0.4976 & 0.4941 & 0.5824 & 0.8765 \\
+\textbf{HGB} & Test & 0.5856 & 0.4776 & 0.4804 & 0.4776 & 0.4780 & 0.5815 & 0.8886 \\
+\bottomrule
+\end{tabular}
+
+\end{table}
